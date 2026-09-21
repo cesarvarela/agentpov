@@ -1,6 +1,10 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
+// Imported before the theme so our token overrides win over allotment's
+// `:root` defaults (--focus-border, --separator-border, --sash-size).
+import "allotment/dist/style.css";
+
 import App from "./App";
 import "./styles/globals.css";
 

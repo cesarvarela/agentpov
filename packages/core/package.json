@@ -11,7 +11,9 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
@@ -20,6 +22,7 @@
     "lint": "echo \"(no linter configured for @agentview/core)\""
   },
   "devDependencies": {
+    "@types/node": "24.13.6",
     "typescript": "^5.9.3",
     "vitest": "^3.2.7"
   }

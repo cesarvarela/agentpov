@@ -11,3 +11,12 @@ body,
 #root {
   height: 100%;
 }
+
+/* allotment sash theming — see the package README for the variables. The CSS
+   itself is imported from main.tsx ahead of this file. */
+:root {
+  --separator-border: var(--om-border);
+  --focus-border: var(--om-amber);
+  --sash-size: 8px;
+  --sash-hover-size: 2px;
+}

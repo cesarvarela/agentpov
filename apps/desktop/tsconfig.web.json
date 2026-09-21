@@ -12,5 +12,9 @@
     },
     "tsBuildInfoFile": "node_modules/.tmp/tsconfig.web.tsbuildinfo"
   },
-  "include": ["src/renderer/src/**/*", "src/preload/index.ts"]
+  "include": [
+    "src/renderer/src/**/*",
+    "src/preload/index.ts",
+    "src/shared/**/*"
+  ]
 }

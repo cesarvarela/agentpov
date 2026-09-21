@@ -3,13 +3,26 @@
 The resolution engine behind agentview. Given a project folder and a file
 inside it, it answers: **what does a coding agent actually see here?**
 
-Today this package is a stub — `resolveContext(folder, file)` returns a
-well-typed empty `ResolvedContext`. The types in `src/types.ts` are the real
-contract and are already shaped for the full implementation.
+This is implemented. `resolveContext(folder, file, options)` is async, reads
+everything through an injected `FileSystemReader`, and returns a fully
+populated `ResolvedContext`. The types in `src/types.ts` are the contract.
 
-## What it will do
+```ts
+import { resolveContext, createNodeFileSystem } from "@agentview/core";
 
-`resolveContext(folder, file)` will collect, with provenance for every item:
+const context = await resolveContext("/projects/acme/shop-api", "src/api/payments.ts", {
+  fs: createNodeFileSystem(),
+  homeDir: os.homedir(),
+});
+```
+
+`file` may be absolute or relative to `folder`; the result always reports it
+as absolute. Missing files are never errors — anything present but unusable
+(bad JSON, a missing `@import`) shows up in `diagnostics`.
+
+## What it collects
+
+`resolveContext` collects, with provenance for every item:
 
 - **Memory / instructions** — every `CLAUDE.md` that applies to `file`: the
   enterprise-managed one, the user's `~/.claude/CLAUDE.md`, the project root
@@ -25,6 +38,8 @@ contract and are already shaped for the full implementation.
   hook that never fires for this file is visible as such.
 - **Skills, subagents and MCP servers** — what is available in this folder and
   where each one is defined.
+- **Memory directory** — `~/.claude/projects/<slug>/memory/`, with `MEMORY.md`
+  as the index and the rest recalled on demand.
 
 ## Precedence
 
@@ -43,14 +58,17 @@ Managed  →  User  →  Project  →  Local  →  Directory
 | Directory | `CLAUDE.md` / config in subdirectories on the path to the file |
 
 The exception is `deny`: a deny rule at any layer is not overridden by an
-`allow` at a higher layer. That asymmetry will be modelled explicitly rather
-than falling out of a generic merge.
+`allow` at a higher layer. That asymmetry is modelled explicitly rather than
+falling out of a generic merge.
 
 ## Design goals
 
 - **Pure and side-effect free at the API edge.** Filesystem access goes through
-  an injectable reader so the resolver can be tested against fixtures and, later,
-  run against a hypothetical ("what if I added this rule?") tree.
+  an injectable reader so the resolver can be tested against fixtures and
+  run against a hypothetical ("what if I added this rule?") tree. The resolver
+  itself only ever touches `options.fs`, `options.homeDir` and
+  `options.platform`; `createNodeFileSystem()` (in `src/node-fs.ts`) is the only
+  place that talks to `node:fs`.
 - **Provenance always.** Every entry carries the absolute path and layer it came
   from — the UI is built entirely around "why is this here?".
 - **Agent-agnostic shape.** Claude Code first, but the result type deliberately

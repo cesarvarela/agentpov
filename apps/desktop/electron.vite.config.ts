@@ -5,7 +5,9 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    // @agentview/core is a pure-ESM workspace package; bundling it keeps the
+    // CommonJS main bundle from having to require() an ES module at runtime.
+    plugins: [externalizeDepsPlugin({ exclude: ["@agentview/core"] })],
     build: {
       rollupOptions: {
         input: { index: resolve(__dirname, "src/main/index.ts") },
