@@ -1,0 +1,175 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* Scan this package's own components for utility classes. Paths are relative to
+   this file (packages/ui/src/styles/globals.css). */
+@source "../";
+
+/* agentview is a dark-first app: the `dark` variant is opt-in via a class, but
+   the default token values below are already the dark palette. */
+@custom-variant dark (&:is(.dark, .dark *));
+
+/*
+ * Design tokens from design/README.md.
+ * Exposed twice: as --om-* raw brand tokens, and mapped onto shadcn's
+ * semantic tokens so shadcn components pick them up unchanged.
+ */
+:root {
+  /* --- raw brand tokens --- */
+  --om-bg: #101216;
+  --om-panel: #171a20;
+  --om-raised: #1e222a;
+  --om-border: #2a2f38;
+  --om-text: #e6e8ec;
+  --om-muted: #8b919c;
+  --om-amber: #e8b04c;
+  --om-teal: #4fc7c0;
+  --om-allow: #5fbf7a;
+  --om-ask: #e8b04c;
+  --om-deny: #e5645f;
+
+  --om-font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+  --om-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo,
+    monospace;
+  --om-radius: 6px;
+
+  /* --- shadcn semantic tokens --- */
+  --radius: var(--om-radius);
+
+  --background: var(--om-bg);
+  --foreground: var(--om-text);
+
+  --card: var(--om-panel);
+  --card-foreground: var(--om-text);
+
+  --popover: var(--om-raised);
+  --popover-foreground: var(--om-text);
+
+  --primary: var(--om-amber);
+  --primary-foreground: var(--om-bg);
+
+  --secondary: var(--om-raised);
+  --secondary-foreground: var(--om-text);
+
+  --muted: var(--om-raised);
+  --muted-foreground: var(--om-muted);
+
+  --accent: var(--om-teal);
+  --accent-foreground: var(--om-bg);
+
+  --destructive: var(--om-deny);
+  --destructive-foreground: var(--om-bg);
+
+  --border: var(--om-border);
+  --input: var(--om-border);
+  --ring: var(--om-amber);
+
+  --chart-1: var(--om-amber);
+  --chart-2: var(--om-teal);
+  --chart-3: var(--om-allow);
+  --chart-4: var(--om-deny);
+  --chart-5: var(--om-muted);
+
+  --sidebar: var(--om-panel);
+  --sidebar-foreground: var(--om-text);
+  --sidebar-primary: var(--om-amber);
+  --sidebar-primary-foreground: var(--om-bg);
+  --sidebar-accent: var(--om-raised);
+  --sidebar-accent-foreground: var(--om-text);
+  --sidebar-border: var(--om-border);
+  --sidebar-ring: var(--om-amber);
+}
+
+/* `.dark` is a no-op alias so shadcn's dark: utilities behave as expected when
+   the class is present. */
+.dark {
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-sans: var(--om-font-sans);
+  --font-mono: var(--om-font-mono);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 6px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* brand-named utilities: bg-om-panel, text-om-muted, border-om-border, ... */
+  --color-om-bg: var(--om-bg);
+  --color-om-panel: var(--om-panel);
+  --color-om-raised: var(--om-raised);
+  --color-om-border: var(--om-border);
+  --color-om-text: var(--om-text);
+  --color-om-muted: var(--om-muted);
+  --color-om-amber: var(--om-amber);
+  --color-om-teal: var(--om-teal);
+  --color-om-allow: var(--om-allow);
+  --color-om-ask: var(--om-ask);
+  --color-om-deny: var(--om-deny);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--om-font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  code,
+  kbd,
+  pre,
+  samp {
+    font-family: var(--om-font-mono);
+  }
+
+  *:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}

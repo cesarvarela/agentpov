@@ -1,0 +1,86 @@
+<title>agentview mocks</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --bg:#f3f4f7; --panel:#ffffff; --border:#d9dce3; --text:#1b1e25; --muted:#5f6674;
+    --accent:#b8791a; --accent-soft:#f6ecd8; --frame:#101216; --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --bg:#101216; --panel:#171a20; --border:#2a2f38; --text:#e6e8ec; --muted:#8b919c; --accent:#e8b04c; --accent-soft:#2a2414;
+  }}
+  :root[data-theme="dark"]{ --bg:#101216; --panel:#171a20; --border:#2a2f38; --text:#e6e8ec; --muted:#8b919c; --accent:#e8b04c; --accent-soft:#2a2414; }
+  body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:15px;line-height:1.5}
+  a{color:var(--accent)} a:hover{text-decoration:underline}
+  .wrap{max-width:1280px;margin:0 auto;padding-inline:20px;padding-block:0 64px}
+  header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--border)}
+  header.top .wrap{display:flex;align-items:center;gap:20px;padding-block:12px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:17px}
+  .brand svg{width:20px;height:20px;stroke:var(--accent);fill:none;stroke-width:1.6}
+  nav{display:flex;gap:4px;flex-wrap:wrap}
+  nav a{color:var(--muted);text-decoration:none;padding:6px 12px;border-radius:6px;font-weight:500}
+  nav a:hover{background:var(--panel);text-decoration:none;color:var(--text)}
+  nav a.on{background:var(--accent-soft);color:var(--accent)}
+  .intro{padding-block:36px 8px;max-width:760px}
+  .intro h1{font-size:28px;line-height:1.2;margin:0 0 10px;text-wrap:balance}
+  .intro p{margin:0;color:var(--muted)}
+  .intro code, .cap code{font-family:var(--mono);font-size:.92em;background:var(--panel);border:1px solid var(--border);padding:1px 5px;border-radius:4px}
+  h2{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:44px 0 16px;padding-top:8px;border-top:1px solid var(--border)}
+  .mock{display:grid;gap:12px;margin-bottom:40px}
+  .mock .cap{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap}
+  .mock h3{margin:0;font-size:18px;font-weight:600}
+  .mock h3 span{color:var(--accent);font-family:var(--mono);font-size:13px;margin-right:8px}
+  .mock p{margin:4px 0 0;color:var(--muted);max-width:720px}
+  .mock .open{font-size:13px;white-space:nowrap}
+  .frame{position:relative;width:100%;max-width:100%;background:var(--frame);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  .frame iframe{position:absolute;top:0;left:0;border:0;transform-origin:0 0;background:var(--frame)}
+  .lofi .frame{border-style:dashed}
+  @media (max-width:600px){ .intro h1{font-size:23px} }
+</style>
+
+<header class="top"><div class="wrap">
+  <div class="brand"><svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 12l9 4 9-4"/><path d="M3 17l9 4 9-4"/></svg>agentview</div>
+  <nav><a href="#phase1" class="on">Phase 1</a><a href="#screens">Screens</a><a href="#workflows">Workflows</a></nav>
+</div></header>
+
+<div class="wrap">
+  <div class="intro">
+    <h1>How a coding agent sees a folder</h1>
+    <p>Mocks for a desktop app (Electron + Vite) that resolves everything shaping Claude Code's view of a file: the <code>CLAUDE.md</code> chain, memory, settings and permission rules at every level, hooks, skills, agents and MCP servers. The example project throughout is <code>~/projects/acme/shop-api</code> with <code>src/api/payments.ts</code> selected. Frames are live HTML; scroll inside is disabled, open one full size to inspect.</p>
+  </div>
+
+  <h2 id="phase1">Phase 1 · what gets built first</h2>
+  <div class="mock" data-w="1440" data-h="900"><div class="cap"><div><h3>File tree + content view</h3><p>Shell, tree with badges, content view. No right rail, no Simulate. Resolved verdicts move into the chip row. The left sidebar toggle sits at the top right; the right rail has no visible affordance until phase 2.</p></div><a class="open" href="phase1/Phase1Main.dc.html" target="_blank">Open full size</a></div><div class="frame"><iframe src="phase1/Phase1Main.dc.html" title="Phase 1 main" loading="lazy" scrolling="no"></iframe></div></div>
+  <div class="mock" data-w="1440" data-h="900"><div class="cap"><div><h3>Left sidebar collapsed</h3><p>Tree collapses to a 40px strip like VS Code; content fills the width.</p></div><a class="open" href="phase1/Phase1Collapsed.dc.html" target="_blank">Open full size</a></div><div class="frame"><iframe src="phase1/Phase1Collapsed.dc.html" title="Phase 1 collapsed" loading="lazy" scrolling="no"></iframe></div></div>
+
+  <h2 id="screens">Screens · hi-fi, later phases</h2>
+  <div class="mock" data-w="1440" data-h="900"><div class="cap"><div><h3>File view</h3><p>The main screen. Tree with config badges, the instruction chain in precedence order, memory, permission rules with overrides struck through, hooks that fire on Edit, and the effective view Claude actually receives.</p></div><a class="open" href="screens/Main.dc.html" target="_blank">Open full size</a></div><div class="frame"><iframe src="screens/Main.dc.html" title="File view" loading="lazy" scrolling="no"></iframe></div></div>
+  <div class="mock" data-w="1440" data-h="900"><div class="cap"><div><h3>Hooks matrix</h3><p>Events × levels. Filtered to “Edit on this file” so only firing hooks light up; the side panel shows matcher, source line and run order.</p></div><a class="open" href="screens/Hooks.dc.html" target="_blank">Open full size</a></div><div class="frame"><iframe src="screens/Hooks.dc.html" title="Hooks matrix" loading="lazy" scrolling="no"></iframe></div></div>
+  <div class="mock" data-w="1440" data-h="900"><div class="cap"><div><h3>Situation simulator</h3><p>Pick agent, action, path and session state; see the step-by-step timeline of what loads, what is checked and what fires, without executing anything.</p></div><a class="open" href="screens/Simulate.dc.html" target="_blank">Open full size</a></div><div class="frame"><iframe src="screens/Simulate.dc.html" title="Situation simulator" loading="lazy" scrolling="no"></iframe></div></div>
+  <div class="mock" data-w="1440" data-h="900"><div class="cap"><div><h3>Layers &amp; precedence</h3><p>Managed → User → Project → Local → Directory lanes with every config artifact found, and conflicts marked with who wins. Answers “what exists and who overrides whom” regardless of file.</p></div><a class="open" href="screens/Layers.dc.html" target="_blank">Open full size</a></div><div class="frame"><iframe src="screens/Layers.dc.html" title="Layers and precedence" loading="lazy" scrolling="no"></iframe></div></div>
+  <div class="mock lofi" data-w="1440" data-h="900"><div class="cap"><div><h3>Alt direction · devtools-style inspector</h3><p>Low-fi alternate for the file view: one dense pane like a browser Styles panel, overridden lines struck through, no right rail.</p></div><a class="open" href="screens/AltDense.dc.html" target="_blank">Open full size</a></div><div class="frame"><iframe src="screens/AltDense.dc.html" title="Alt inspector" loading="lazy" scrolling="no"></iframe></div></div>
+
+  <h2 id="workflows">Workflows · user stories, low-fi</h2>
+  <div class="mock lofi" data-w="1600" data-h="620"><div class="cap"><div><h3>Workflow map</h3><p>Who uses it, the core loop they run, and the six stories below.</p></div><a class="open" href="stories/StoryOverview.dc.html" target="_blank">Open full size</a></div><div class="frame"><iframe src="stories/StoryOverview.dc.html" title="Workflow map" loading="lazy" scrolling="no"></iframe></div></div>
+  <div class="mock lofi" data-w="1600" data-h="620"><div class="cap"><div><h3><span>S1</span>Why did Claude ignore my instruction?</h3><p>The rule sat in <code>src/api/CLAUDE.md</code>, which loads only when a file there is read; the session wrote without reading.</p></div><a class="open" href="stories/S1IgnoredInstruction.dc.html" target="_blank">Open full size</a></div><div class="frame"><iframe src="stories/S1IgnoredInstruction.dc.html" title="S1" loading="lazy" scrolling="no"></iframe></div></div>
+  <div class="mock lofi" data-w="1600" data-h="620"><div class="cap"><div><h3><span>S2</span>My hook didn't run</h3><p>Matcher was <code>Edit</code> only, so MultiEdit skipped it. Fixed from the detail panel, verified by rescan.</p></div><a class="open" href="stories/S2HookDidntFire.dc.html" target="_blank">Open full size</a></div><div class="frame"><iframe src="stories/S2HookDidntFire.dc.html" title="S2" loading="lazy" scrolling="no"></iframe></div></div>
+  <div class="mock lofi" data-w="1600" data-h="620"><div class="cap"><div><h3><span>S3</span>Is <code>.env</code> really unreadable?</h3><p>Team lead audit. The deny lives only in <code>~/.claude</code>, so it is moved into the repo's settings where teammates get it.</p></div><a class="open" href="stories/S3SecretsAudit.dc.html" target="_blank">Open full size</a></div><div class="frame"><iframe src="stories/S3SecretsAudit.dc.html" title="S3" loading="lazy" scrolling="no"></iframe></div></div>
+  <div class="mock lofi" data-w="1600" data-h="620"><div class="cap"><div><h3><span>S4</span>What is Claude actually working with here?</h3><p>Joining a repo: scan, Layers overview, File view on any file, Copy as context into the onboarding PR.</p></div><a class="open" href="stories/S4NewRepoOnboarding.dc.html" target="_blank">Open full size</a></div><div class="frame"><iframe src="stories/S4NewRepoOnboarding.dc.html" title="S4" loading="lazy" scrolling="no"></iframe></div></div>
+  <div class="mock lofi" data-w="1600" data-h="620"><div class="cap"><div><h3><span>S5</span>Before I let it run: what will happen?</h3><p>Simulate <code>npm run db:reset</code>: an ask at Project, then a Local PreToolUse hook whose exit 2 blocks it.</p></div><a class="open" href="stories/S5WhatIfBeforeRun.dc.html" target="_blank">Open full size</a></div><div class="frame"><iframe src="stories/S5WhatIfBeforeRun.dc.html" title="S5" loading="lazy" scrolling="no"></iframe></div></div>
+  <div class="mock lofi" data-w="1600" data-h="620"><div class="cap"><div><h3><span>S6</span>Same folder, different agent</h3><p>Future, needs a Codex adapter: side-by-side of what Claude and Codex each see, rules only in <code>CLAUDE.md</code> flagged as invisible to Codex.</p></div><a class="open" href="stories/S6CompareAgents.dc.html" target="_blank">Open full size</a></div><div class="frame"><iframe src="stories/S6CompareAgents.dc.html" title="S6" loading="lazy" scrolling="no"></iframe></div></div>
+</div>
+
+<script>
+(function(){
+  var mocks=document.querySelectorAll('.mock');
+  function fit(m){
+    var w=+m.dataset.w,h=+m.dataset.h,f=m.querySelector('.frame'),i=m.querySelector('iframe');
+    var s=f.clientWidth/w; i.width=w;i.height=h;i.style.transform='scale('+s+')';f.style.height=Math.round(h*s)+'px';
+  }
+  function all(){mocks.forEach(fit)}
+  all(); window.addEventListener('resize',all);
+  if(window.ResizeObserver){var ro=new ResizeObserver(all);ro.observe(document.body)}
+  var links=document.querySelectorAll('nav a'),secs=['phase1','screens','workflows'];
+  function nav(){var y=window.scrollY+120,cur='screens';secs.forEach(function(id){var e=document.getElementById(id);if(e&&e.offsetTop<=y)cur=id});links.forEach(function(a){a.classList.toggle('on',a.getAttribute('href')==='#'+cur)})}
+  window.addEventListener('scroll',nav,{passive:true});nav();
+})();
+</script>

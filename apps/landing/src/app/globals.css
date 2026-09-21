@@ -1,0 +1,14 @@
+/* Shared agentview theme: Tailwind v4 + design tokens + shadcn semantic tokens. */
+@import "@agentview/ui/styles.css";
+
+/* Tailwind must scan this app and the shared UI package for class names. */
+@source "../../src";
+@source "../../../../packages/ui/src";
+
+/* Use the fonts loaded by next/font in layout.tsx. */
+:root {
+  --om-font-sans: var(--font-ibm-plex-sans), ui-sans-serif, system-ui,
+    sans-serif;
+  --om-font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular,
+    Menlo, monospace;
+}

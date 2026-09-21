@@ -1,0 +1,187 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; background: #101216; font-family: 'IBM Plex Sans', system-ui, sans-serif; }
+    a { color: #4fc7c0; } a:hover { color: #7fdbd5; }
+  </style>
+</helmet>
+<div style="width:1440px;height:900px;overflow:hidden;background:#101216;color:#8b919c;font-family:'IBM Plex Sans', system-ui, sans-serif;display:flex;flex-direction:column;">
+
+  <!-- wireframe top bar -->
+  <div style="height:44px;flex:0 0 44px;border-bottom:1px dashed #2a2f38;display:flex;align-items:center;gap:12px;padding:0 16px;box-sizing:border-box;">
+    <div style="flex:0 0 96px;height:12px;border-radius:3px;background:#2a2f38;"></div>
+    <div style="flex:0 0 auto;display:flex;align-items:center;gap:4px;padding:3px;border:1px dashed #2a2f38;border-radius:6px;">
+      <div style="width:76px;height:16px;border-radius:3px;background:#3a4049;"></div>
+      <div style="width:48px;height:16px;border-radius:3px;background:#22262d;"></div>
+      <div style="width:48px;height:16px;border-radius:3px;background:#22262d;"></div>
+      <div style="width:62px;height:16px;border-radius:3px;background:#22262d;"></div>
+    </div>
+    <div style="flex:1;min-width:0;height:10px;border-radius:3px;background:#22262d;"></div>
+    <div style="flex:0 0 88px;height:24px;border:1px dashed #2a2f38;border-radius:6px;"></div>
+    <div style="flex:0 0 72px;height:24px;border:1px dashed #4a3d22;border-radius:6px;"></div>
+  </div>
+
+  <div style="flex:1;min-height:0;display:flex;">
+
+    <!-- wireframe tree -->
+    <div style="width:200px;flex:0 0 200px;border-right:1px dashed #2a2f38;display:flex;flex-direction:column;min-height:0;overflow:hidden;padding:12px;box-sizing:border-box;gap:8px;">
+      <div style="flex:0 0 auto;height:10px;width:70px;border-radius:3px;background:#2a2f38;"></div>
+      <div style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:7px;">
+        <div style="display:flex;align-items:center;gap:6px;"><div style="width:10px;height:10px;border-radius:2px;background:#2a2f38;"></div><div style="width:64px;height:8px;border-radius:3px;background:#2a2f38;"></div></div>
+        <div style="display:flex;align-items:center;gap:6px;padding-left:16px;"><div style="width:10px;height:10px;border-radius:2px;background:#22262d;"></div><div style="width:84px;height:8px;border-radius:3px;background:#22262d;"></div></div>
+        <div style="display:flex;align-items:center;gap:6px;padding-left:16px;"><div style="width:10px;height:10px;border-radius:2px;background:#22262d;"></div><div style="width:100px;height:8px;border-radius:3px;background:#22262d;"></div></div>
+        <div style="display:flex;align-items:center;gap:6px;padding-left:16px;"><div style="width:10px;height:10px;border-radius:2px;background:#22262d;"></div><div style="width:58px;height:8px;border-radius:3px;background:#22262d;"></div></div>
+        <div style="display:flex;align-items:center;gap:6px;"><div style="width:10px;height:10px;border-radius:2px;background:#2a2f38;"></div><div style="width:40px;height:8px;border-radius:3px;background:#2a2f38;"></div></div>
+        <div style="display:flex;align-items:center;gap:6px;padding-left:16px;"><div style="width:10px;height:10px;border-radius:2px;background:#2a2f38;"></div><div style="width:46px;height:8px;border-radius:3px;background:#2a2f38;"></div></div>
+        <div style="display:flex;align-items:center;gap:6px;padding-left:32px;"><div style="width:10px;height:10px;border-radius:2px;background:#22262d;"></div><div style="width:78px;height:8px;border-radius:3px;background:#22262d;"></div></div>
+        <div style="display:flex;align-items:center;gap:6px;padding-left:32px;"><div style="width:10px;height:10px;border-radius:2px;background:#22262d;"></div><div style="width:52px;height:8px;border-radius:3px;background:#22262d;"></div></div>
+        <div style="display:flex;align-items:center;gap:6px;padding-left:32px;background:#2a2418;padding-top:3px;padding-bottom:3px;border-radius:3px;"><div style="width:10px;height:10px;border-radius:2px;background:#e8b04c;"></div><span style="font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:10px;color:#e8b04c;">payments.ts</span></div>
+        <div style="display:flex;align-items:center;gap:6px;padding-left:16px;"><div style="width:10px;height:10px;border-radius:2px;background:#22262d;"></div><div style="width:34px;height:8px;border-radius:3px;background:#22262d;"></div></div>
+        <div style="display:flex;align-items:center;gap:6px;"><div style="width:10px;height:10px;border-radius:2px;background:#22262d;"></div><div style="width:56px;height:8px;border-radius:3px;background:#22262d;"></div></div>
+        <div style="display:flex;align-items:center;gap:6px;padding-left:16px;"><div style="width:10px;height:10px;border-radius:2px;background:#22262d;"></div><div style="width:88px;height:8px;border-radius:3px;background:#22262d;"></div></div>
+        <div style="display:flex;align-items:center;gap:6px;padding-left:16px;"><div style="width:10px;height:10px;border-radius:2px;background:#22262d;"></div><div style="width:64px;height:8px;border-radius:3px;background:#22262d;"></div></div>
+        <div style="display:flex;align-items:center;gap:6px;padding-left:16px;"><div style="width:10px;height:10px;border-radius:2px;background:#22262d;"></div><div style="width:30px;height:8px;border-radius:3px;background:#22262d;"></div></div>
+        <div style="display:flex;align-items:center;gap:6px;padding-left:16px;"><div style="width:10px;height:10px;border-radius:2px;background:#22262d;"></div><div style="width:72px;height:8px;border-radius:3px;background:#22262d;"></div></div>
+      </div>
+    </div>
+
+    <!-- inspector -->
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden;padding:14px 18px;box-sizing:border-box;gap:8px;">
+
+      <div style="flex:0 0 auto;display:flex;align-items:center;gap:10px;">
+        <span style="font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:14px;color:#c3c7cd;flex:0 0 auto;">src/api/payments.ts</span>
+        <div style="flex:1;min-width:0;height:8px;border-radius:3px;background:#22262d;"></div>
+        <span style="flex:0 0 auto;font-size:11px;color:#e8b04c;border:1px dashed #4a3d22;border-radius:6px;padding:3px 8px;">Alt: devtools-style inspector</span>
+        <span style="flex:0 0 auto;font-size:11px;color:#575c66;border:1px dashed #2a2f38;border-radius:6px;padding:3px 8px;">wireframe</span>
+      </div>
+
+      <div style="flex:0 0 auto;display:flex;align-items:center;gap:8px;border-bottom:1px dashed #2a2f38;padding-bottom:8px;">
+        <span style="font-size:11px;color:#c3c7cd;border-bottom:2px solid #e8b04c;padding-bottom:6px;">Resolved</span>
+        <span style="font-size:11px;color:#575c66;">Instructions</span>
+        <span style="font-size:11px;color:#575c66;">Permissions</span>
+        <span style="font-size:11px;color:#575c66;">Hooks</span>
+        <span style="flex:1;min-width:0;"></span>
+        <span style="font-size:11px;color:#575c66;">highest precedence first, like a Styles pane</span>
+      </div>
+
+      <div style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:7px;">
+
+        <!-- Managed -->
+        <div style="flex:0 0 auto;border:1px solid #2a2f38;border-radius:6px;overflow:hidden;">
+          <div style="height:26px;display:flex;align-items:center;gap:8px;padding:0 10px;background:#1e222a;">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#8b919c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+            <span style="font-size:11px;color:#c3c7cd;flex:0 0 auto;">Managed</span>
+            <span style="flex:1;min-width:0;font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:10px;color:#575c66;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">/Library/Application Support/ClaudeCode/managed-settings.json</span>
+            <span style="flex:0 0 auto;font-size:10px;color:#575c66;">2 keys</span>
+          </div>
+          <div style="padding:6px 10px 7px 32px;display:flex;flex-direction:column;gap:3px;">
+            <span style="font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:11px;color:#c3c7cd;">permissions.deny: Edit(.claude/settings.json)</span>
+            <span style="font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:11px;color:#c3c7cd;">hooks.SessionStart[startup]: policy-banner.sh</span>
+          </div>
+        </div>
+
+        <!-- Local -->
+        <div style="flex:0 0 auto;border:1px solid #4a3d22;border-radius:6px;overflow:hidden;">
+          <div style="height:26px;display:flex;align-items:center;gap:8px;padding:0 10px;background:#2a2418;">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#e8b04c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+            <span style="font-size:11px;color:#e8b04c;flex:0 0 auto;">Local</span>
+            <span style="flex:1;min-width:0;font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:10px;color:#8b919c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">.claude/settings.local.json &middot; CLAUDE.local.md</span>
+            <span style="flex:0 0 auto;font-size:10px;color:#e8b04c;">wins 1 key</span>
+          </div>
+          <div style="padding:6px 10px 7px 32px;display:flex;flex-direction:column;gap:3px;">
+            <span style="font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:11px;color:#c3c7cd;">permissions.allow: Bash(npm run *)</span>
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span style="flex:0 0 auto;font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:11px;color:#575c66;text-decoration:line-through;">permissions.allow: Read(./.env)</span>
+              <span style="flex:1;min-width:0;font-size:10px;color:#575c66;">no effect &mdash; deny at User outranks any allow</span>
+            </div>
+            <span style="font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:11px;color:#c3c7cd;">hooks.PreToolUse[Edit]: hooks/no-edit-on-main.sh</span>
+            <span style="font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:11px;color:#c3c7cd;">instructions: CLAUDE.local.md</span>
+          </div>
+        </div>
+
+        <!-- Project -->
+        <div style="flex:0 0 auto;border:1px solid #2a2f38;border-radius:6px;overflow:hidden;">
+          <div style="height:26px;display:flex;align-items:center;gap:8px;padding:0 10px;background:#1e222a;">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#8b919c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+            <span style="font-size:11px;color:#c3c7cd;flex:0 0 auto;">Project</span>
+            <span style="flex:1;min-width:0;font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:10px;color:#575c66;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">.claude/settings.json &middot; CLAUDE.md &middot; .claude/CLAUDE.md</span>
+            <span style="flex:0 0 auto;font-size:10px;color:#575c66;">6 keys</span>
+          </div>
+          <div style="padding:6px 10px 7px 32px;display:flex;flex-direction:column;gap:3px;">
+            <span style="font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:11px;color:#c3c7cd;">permissions.allow: Edit(src/**)</span>
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span style="flex:0 0 auto;font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:11px;color:#575c66;text-decoration:line-through;">permissions.ask: Bash(npm run *)</span>
+              <span style="flex:1;min-width:0;font-size:10px;color:#575c66;">overridden by Local</span>
+            </div>
+            <span style="font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:11px;color:#c3c7cd;">hooks.PreToolUse[Edit|Write]: .claude/hooks/lint.sh</span>
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span style="flex:0 0 auto;font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:11px;color:#575c66;text-decoration:line-through;">hooks.PostToolUse[Write]: git add -N</span>
+              <span style="flex:1;min-width:0;font-size:10px;color:#575c66;">matcher does not match Edit</span>
+            </div>
+            <span style="font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:11px;color:#c3c7cd;">instructions: CLAUDE.md &rarr; @docs/api-conventions.md</span>
+          </div>
+        </div>
+
+        <!-- User -->
+        <div style="flex:0 0 auto;border:1px solid #2a2f38;border-radius:6px;overflow:hidden;">
+          <div style="height:26px;display:flex;align-items:center;gap:8px;padding:0 10px;background:#1e222a;">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#8b919c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+            <span style="font-size:11px;color:#c3c7cd;flex:0 0 auto;">User</span>
+            <span style="flex:1;min-width:0;font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:10px;color:#575c66;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">~/.claude/settings.json &middot; CLAUDE.md &middot; memory/</span>
+            <span style="flex:0 0 auto;font-size:10px;color:#575c66;">5 keys</span>
+          </div>
+          <div style="padding:6px 10px 7px 32px;display:flex;flex-direction:column;gap:3px;">
+            <span style="font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:11px;color:#c3c7cd;">permissions.deny: Read(./.env)</span>
+            <span style="font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:11px;color:#c3c7cd;">hooks.PostToolUse[Edit]: prettier --write</span>
+            <span style="font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:11px;color:#c3c7cd;">memory: MEMORY.md + 2 files</span>
+          </div>
+        </div>
+
+        <!-- Directory -->
+        <div style="flex:0 0 auto;border:1px solid #2a2f38;border-radius:6px;overflow:hidden;">
+          <div style="height:26px;display:flex;align-items:center;gap:8px;padding:0 10px;background:#1e222a;">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#8b919c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l4 4-4 4"/></svg>
+            <span style="font-size:11px;color:#c3c7cd;flex:0 0 auto;">Directory</span>
+            <span style="flex:1;min-width:0;font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:10px;color:#575c66;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">src/api/CLAUDE.md &middot; loaded when this file is read</span>
+            <span style="flex:0 0 auto;font-size:10px;color:#575c66;">collapsed</span>
+          </div>
+        </div>
+
+        <!-- Computed -->
+        <div style="flex:0 0 auto;border:1px dashed #2a2f38;border-radius:6px;overflow:hidden;">
+          <div style="height:26px;display:flex;align-items:center;gap:8px;padding:0 10px;">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#8b919c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+            <span style="font-size:11px;color:#c3c7cd;flex:1;min-width:0;">Computed &mdash; what the agent actually gets</span>
+            <span style="flex:0 0 auto;font-size:10px;color:#575c66;">replaces the right rail</span>
+          </div>
+          <div style="padding:2px 10px 8px 32px;display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:3px 16px;">
+            <span style="font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:11px;color:#c3c7cd;">Edit(src/api/payments.ts) = allow</span>
+            <span style="font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:11px;color:#c3c7cd;">instructions = 5 files, 6.4 KB</span>
+            <span style="font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:11px;color:#c3c7cd;">Read(./.env) = deny</span>
+            <span style="font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:11px;color:#c3c7cd;">memory = 3 files</span>
+            <span style="font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:11px;color:#c3c7cd;">Bash(npm run *) = allow</span>
+            <span style="font-family:'JetBrains Mono', ui-monospace, Menlo, monospace;font-size:11px;color:#c3c7cd;">hooks on Edit = 3 commands</span>
+          </div>
+        </div>
+
+        <div style="flex:0 0 auto;display:flex;align-items:center;gap:10px;border-top:1px dashed #2a2f38;padding-top:8px;">
+          <span style="font-size:11px;color:#575c66;flex:1;min-width:0;">Trade-off: everything is on one surface and diffable, but nothing is summarised &mdash; the reader has to scan all five blocks to answer &ldquo;can it edit this file?&rdquo;</span>
+          <div style="flex:0 0 108px;height:24px;border:1px dashed #2a2f38;border-radius:6px;"></div>
+          <div style="flex:0 0 84px;height:24px;border:1px dashed #4a3d22;border-radius:6px;"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

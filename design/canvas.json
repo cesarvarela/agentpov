@@ -1,0 +1,174 @@
+{
+  "pages": [
+    {
+      "id": "page-0",
+      "name": "Phase 1"
+    },
+    {
+      "id": "page-1",
+      "name": "Screens"
+    },
+    {
+      "id": "page-2",
+      "name": "Workflows"
+    }
+  ],
+  "artboards": [
+    {
+      "file": "Phase1Main.dc.html",
+      "title": "Phase 1 · File + content view",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "page": "page-0"
+    },
+    {
+      "file": "Phase1Collapsed.dc.html",
+      "title": "Phase 1 · left sidebar collapsed",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "page": "page-0"
+    },
+    {
+      "file": "Main.dc.html",
+      "title": "File view",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "page": "page-1"
+    },
+    {
+      "file": "Hooks.dc.html",
+      "title": "Hooks matrix",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "page": "page-1"
+    },
+    {
+      "file": "Simulate.dc.html",
+      "title": "Situation simulator",
+      "x": 0,
+      "y": 1060,
+      "w": 1440,
+      "h": 900,
+      "page": "page-1"
+    },
+    {
+      "file": "Layers.dc.html",
+      "title": "Layers & precedence",
+      "x": 1560,
+      "y": 1060,
+      "w": 1440,
+      "h": 900,
+      "page": "page-1"
+    },
+    {
+      "file": "AltDense.dc.html",
+      "title": "Alt: devtools-style inspector (low-fi)",
+      "x": 0,
+      "y": 2120,
+      "w": 1440,
+      "h": 900,
+      "page": "page-1"
+    },
+    {
+      "file": "StoryOverview.dc.html",
+      "title": "Workflow map",
+      "x": 0,
+      "y": 0,
+      "w": 1600,
+      "h": 620,
+      "page": "page-2"
+    },
+    {
+      "file": "S1IgnoredInstruction.dc.html",
+      "title": "S1 — Why did Claude ignore my instruction?",
+      "x": 0,
+      "y": 740,
+      "w": 1600,
+      "h": 620,
+      "page": "page-2"
+    },
+    {
+      "file": "S2HookDidntFire.dc.html",
+      "title": "S2 — My hook didn't run",
+      "x": 0,
+      "y": 1480,
+      "w": 1600,
+      "h": 620,
+      "page": "page-2"
+    },
+    {
+      "file": "S3SecretsAudit.dc.html",
+      "title": "S3 — Is .env really unreadable?",
+      "x": 0,
+      "y": 2220,
+      "w": 1600,
+      "h": 620,
+      "page": "page-2"
+    },
+    {
+      "file": "S4NewRepoOnboarding.dc.html",
+      "title": "S4 — What is Claude working with here?",
+      "x": 0,
+      "y": 2960,
+      "w": 1600,
+      "h": 620,
+      "page": "page-2"
+    },
+    {
+      "file": "S5WhatIfBeforeRun.dc.html",
+      "title": "S5 — Before I let it run",
+      "x": 0,
+      "y": 3700,
+      "w": 1600,
+      "h": 620,
+      "page": "page-2"
+    },
+    {
+      "file": "S6CompareAgents.dc.html",
+      "title": "S6 — Same folder, different agent",
+      "x": 0,
+      "y": 4440,
+      "w": 1600,
+      "h": 620,
+      "page": "page-2"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "phase1-note",
+      "x": 0,
+      "y": -160,
+      "w": 560,
+      "page": "page-0",
+      "text": "Phase 1 scope: shell, file tree, content view, collapsible left sidebar. Right rail, Simulate, Hooks matrix and Layers come in later phases."
+    },
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -160,
+      "w": 520,
+      "page": "page-1",
+      "text": "agentview — how an agent sees a folder. Claude Code first; agent switcher reserved for Codex / Cursor / Gemini CLI. Selected file across screens: src/api/payments.ts"
+    },
+    {
+      "id": "workflows-note",
+      "x": 1680,
+      "y": 0,
+      "w": 300,
+      "page": "page-2",
+      "text": "Low-fi storyboards. One artboard per user story; each step points at the screen on the Screens page that serves it."
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "page-0"
+  }
+}

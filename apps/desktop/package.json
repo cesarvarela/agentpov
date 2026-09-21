@@ -1,0 +1,32 @@
+{
+  "name": "@agentview/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "description": "agentview desktop app (Electron + Vite + React)",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "lint": "echo \"(no linter configured for @agentview/desktop)\""
+  },
+  "dependencies": {
+    "@agentview/core": "workspace:*",
+    "@agentview/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.1",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^44.4.3",
+    "electron-vite": "^5.0.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.6"
+  }
+}
