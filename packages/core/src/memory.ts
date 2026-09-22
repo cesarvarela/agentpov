@@ -14,6 +14,7 @@ const MAX_IMPORT_DEPTH = 5;
 
 export const REASON_ALWAYS = "always loaded";
 export const REASON_WHEN_READ = "loaded when this file is read";
+export const REASON_WHEN_READ_IN_FOLDER = "loaded when files in this folder are read";
 export const REASON_RECALLED = "recalled on demand";
 
 interface Candidate {
@@ -178,7 +179,10 @@ async function collectMemoryDirectory(run: ResolveRun): Promise<MemoryEntry[]> {
 /** Every CLAUDE.md, import and memory file that applies, lowest precedence first. */
 export async function collectMemory(run: ResolveRun): Promise<MemoryEntry[]> {
   const { p } = run;
-  const fileDir = p.dirname(run.file);
+  // A directory target owns its own CLAUDE.md, so the chain starts at the
+  // target itself; for a file it starts at the directory holding the file.
+  const targetDir =
+    run.targetKind === "directory" ? run.file : p.dirname(run.file);
 
   const candidates: Candidate[] = [
     { path: p.join(managedDirFor(run.platform), "CLAUDE.md"), layer: "managed", scopedToFile: false },
@@ -191,9 +195,12 @@ export async function collectMemory(run: ResolveRun): Promise<MemoryEntry[]> {
     { path: p.join(run.folder, "CLAUDE.local.md"), layer: "local", scopedToFile: false },
   ];
 
-  const directoryCandidates: Candidate[] = descendingChain(p, run.folder, fileDir).map(
+  const directoryCandidates: Candidate[] = descendingChain(p, run.folder, targetDir).map(
     (dir) => ({ path: p.join(dir, "CLAUDE.md"), layer: "directory", scopedToFile: true }),
   );
+
+  const scopedReason =
+    run.targetKind === "directory" ? REASON_WHEN_READ_IN_FOLDER : REASON_WHEN_READ;
 
   const out: MemoryEntry[] = [];
   const seen = new Set<string>();
@@ -202,7 +209,7 @@ export async function collectMemory(run: ResolveRun): Promise<MemoryEntry[]> {
     for (const candidate of list) {
       if (seen.has(candidate.path)) continue;
       seen.add(candidate.path);
-      const reason = candidate.scopedToFile ? REASON_WHEN_READ : REASON_ALWAYS;
+      const reason = candidate.scopedToFile ? scopedReason : REASON_ALWAYS;
       const entry = await readMemoryFile(run, candidate, "claude-md", reason);
       if (!entry) continue;
       out.push(entry);

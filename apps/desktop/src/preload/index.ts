@@ -1,7 +1,12 @@
 import { homedir } from "node:os";
 import { contextBridge, ipcRenderer } from "electron";
 
-import type { FileNode, ReadFileResult, ResolvedContext } from "../shared/ipc";
+import type {
+  FileNode,
+  ReadFileResult,
+  ResolvedContext,
+  TargetKind,
+} from "../shared/ipc";
 
 const api = {
   getAppName: (): Promise<string> => ipcRenderer.invoke("app:getName"),
@@ -10,9 +15,13 @@ const api = {
   /** Recursive tree of `folder`, noise directories skipped, depth-capped. */
   listTree: (folder: string): Promise<FileNode> =>
     ipcRenderer.invoke("fs:listTree", folder),
-  /** Everything an agent sees for `file` inside `folder`. */
-  resolveContext: (folder: string, file: string): Promise<ResolvedContext> =>
-    ipcRenderer.invoke("context:resolve", folder, file),
+  /** Everything an agent sees for `target` (a file or a folder) inside `folder`. */
+  resolveContext: (
+    folder: string,
+    target: string,
+    targetKind: TargetKind,
+  ): Promise<ResolvedContext> =>
+    ipcRenderer.invoke("context:resolve", folder, target, targetKind),
   /** File contents, capped at 200 KB. */
   readFile: (path: string): Promise<ReadFileResult> =>
     ipcRenderer.invoke("fs:readFile", path),

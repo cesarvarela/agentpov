@@ -9,6 +9,7 @@ import {
   type FileNode,
   type ReadFileResult,
   type ResolvedContext,
+  type TargetKind,
 } from "../shared/ipc";
 import { listTree } from "./tree";
 
@@ -68,10 +69,16 @@ app.whenReady().then(() => {
 
   ipcMain.handle(
     "context:resolve",
-    (_event, folder: string, file: string): Promise<ResolvedContext> =>
-      resolveContext(folder, file, {
+    (
+      _event,
+      folder: string,
+      target: string,
+      targetKind: TargetKind = "file",
+    ): Promise<ResolvedContext> =>
+      resolveContext(folder, target, {
         fs: createNodeFileSystem(),
         homeDir: homedir(),
+        targetKind,
       }),
   );
 

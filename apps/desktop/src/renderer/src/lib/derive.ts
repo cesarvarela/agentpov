@@ -29,6 +29,110 @@ export function editHooks(ctx: ResolvedContext): HookEntry[] {
   return ctx.hooks.filter((hook) => hook.firesOnEdit);
 }
 
+/** Instruction entries split into "this folder owns them" and "inherited". */
+export interface FolderMemorySplit {
+  /** CLAUDE.md files living at or under the selected folder. */
+  own: MemoryEntry[];
+  /** Everything the folder inherits: user/project layers and ancestor dirs. */
+  inherited: MemoryEntry[];
+}
+
+/**
+ * Splits `memory` for a folder view. An entry is folder-owned when it is a
+ * `directory`-layer file (a CLAUDE.md picked up because of where the target
+ * sits) that lives at or under `folder`. A directory CLAUDE.md between the
+ * project root and `folder` is an ancestor's, so it counts as inherited.
+ *
+ * @param memory entries from the resolved context, in precedence order.
+ * @param folder absolute path of the selected folder.
+ */
+export function splitFolderMemory(
+  memory: MemoryEntry[],
+  folder: string,
+): FolderMemorySplit {
+  const own: MemoryEntry[] = [];
+  const inherited: MemoryEntry[] = [];
+  for (const entry of memory) {
+    const isOwn =
+      entry.layer === "directory" && relativeTo(entry.path, folder) !== null;
+    (isOwn ? own : inherited).push(entry);
+  }
+  return { own, inherited };
+}
+
+/**
+ * Turns a rule specifier into a project-root-relative path, following the same
+ * conventions as core's permission resolver: `//abs` is absolute, `~/x` is
+ * home-relative, a single leading `/` is project-root relative, and `./x` and
+ * bare `x` are relative to the root too. Returns null when the specifier
+ * resolves outside the project.
+ */
+function specifierProjectPath(
+  specifier: string,
+  root: string,
+  homeDir: string,
+): string | null {
+  const raw = specifier.trim();
+  if (raw.length === 0) return null;
+  if (raw.startsWith("//")) return relativeTo(raw.slice(1), root);
+  if (raw.startsWith("~/")) {
+    return relativeTo(`${homeDir}/${raw.slice(2)}`, root);
+  }
+  if (raw.startsWith("/")) return raw.replace(/^\/+/, "");
+  return raw.replace(/^\.\//, "");
+}
+
+/** Leading segments of a glob before the first one holding a wildcard. */
+function literalPrefix(pattern: string): string {
+  const segments = pattern.replace(/\/+$/, "").split("/");
+  const literal: string[] = [];
+  for (const segment of segments) {
+    if (/[*?]/.test(segment)) break;
+    literal.push(segment);
+  }
+  return literal.join("/");
+}
+
+/**
+ * Does this rule aim at `folder` rather than at the whole project?
+ *
+ * The specifier is resolved to a project-relative path (see
+ * `specifierProjectPath`) and reduced to its wildcard-free leading segments.
+ * The rule targets the folder when those literal segments are the folder's own
+ * project-relative path or sit inside it — or when the specifier is exactly
+ * the folder path. A rule with no specifier, or one whose pattern starts with
+ * a wildcard (`**\/*.ts`), has an empty literal prefix: it covers the project
+ * root too, so it is inherited, not folder-specific.
+ *
+ * @param rule candidate rule; callers pass ones that already `matchesFile`.
+ * @param root absolute project root.
+ * @param folder absolute path of the selected folder (never the root).
+ * @param homeDir absolute home directory, for `~/` specifiers.
+ */
+export function ruleTargetsFolder(
+  rule: PermissionRule,
+  root: string,
+  folder: string,
+  homeDir: string,
+): boolean {
+  if (!rule.specifier) return false;
+
+  const folderPath = relativeTo(folder, root);
+  // The root itself (`""`) is never "folder-specific", nor is a folder outside
+  // the project.
+  if (folderPath === null || folderPath === "") return false;
+
+  const target = specifierProjectPath(rule.specifier, root, homeDir);
+  if (target === null) return false;
+
+  const cleanTarget = target.replace(/\/+$/, "");
+  if (cleanTarget === folderPath) return true;
+
+  const literal = literalPrefix(cleanTarget);
+  if (literal === "") return false;
+  return literal === folderPath || literal.startsWith(`${folderPath}/`);
+}
+
 /** Rules that apply to the selected file and have not been overridden. */
 function liveRulesFor(ctx: ResolvedContext, tool: string): PermissionRule[] {
   return ctx.permissions.filter(

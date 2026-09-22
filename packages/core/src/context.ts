@@ -1,5 +1,5 @@
 import { type PathApi } from "./paths.js";
-import { type FileSystemReader } from "./types.js";
+import { type FileSystemReader, type TargetKind } from "./types.js";
 
 /** Everything the collectors share while one `resolveContext` call runs. */
 export interface ResolveRun {
@@ -9,8 +9,10 @@ export interface ResolveRun {
   homeDir: string;
   /** Absolute, normalised project folder. */
   folder: string;
-  /** Absolute, normalised selected file. */
+  /** Absolute, normalised target: a file, or a directory when `targetKind` says so. */
   file: string;
+  /** Whether `file` is a file or a directory. */
+  targetKind: TargetKind;
   /** Absolute path of the managed config directory for this platform. */
   managedDir: string;
   /** Absolute path of the managed settings file. */

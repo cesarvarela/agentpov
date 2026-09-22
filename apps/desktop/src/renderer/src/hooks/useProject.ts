@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { FileNode, ResolvedContext } from "../../../shared/ipc";
+import type { FileNode, ResolvedContext, TargetKind } from "../../../shared/ipc";
 import { ancestorDirs } from "../lib/paths";
 
 export interface FileDetail {
@@ -9,17 +9,26 @@ export interface FileDetail {
   truncated: boolean;
 }
 
+/** The tree row whose context is on screen: a file or a folder. */
+export interface SelectedTarget {
+  /** Absolute path. */
+  path: string;
+  kind: TargetKind;
+}
+
 export interface Project {
   folder: string | null;
   tree: FileNode | null;
-  selected: string | null;
+  /** Resolution target; the project root right after a folder is opened. */
+  target: SelectedTarget | null;
   context: ResolvedContext | null;
+  /** Line and byte counts, for a file target only. */
   detail: FileDetail | null;
   expanded: Set<string>;
   loading: boolean;
   error: string | null;
   openFolder: () => Promise<void>;
-  selectFile: (path: string) => void;
+  select: (path: string, kind: TargetKind) => void;
   toggleDir: (path: string) => void;
 }
 
@@ -32,7 +41,7 @@ export function useProject(): Project {
 
   const [folder, setFolder] = useState<string | null>(null);
   const [tree, setTree] = useState<FileNode | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [target, setTarget] = useState<SelectedTarget | null>(null);
   const [context, setContext] = useState<ResolvedContext | null>(null);
   const [detail, setDetail] = useState<FileDetail | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -49,7 +58,8 @@ export function useProject(): Project {
       if (!picked) return;
       setError(null);
       setFolder(picked);
-      setSelected(null);
+      // Nothing is selected yet, so the project root is the target.
+      setTarget({ path: picked, kind: "directory" });
       setContext(null);
       setDetail(null);
       setTree(null);
@@ -61,9 +71,9 @@ export function useProject(): Project {
     }
   }, [api]);
 
-  const selectFile = useCallback(
-    (path: string) => {
-      setSelected(path);
+  const select = useCallback(
+    (path: string, kind: TargetKind) => {
+      setTarget({ path, kind });
       if (folder) {
         setExpanded((previous) => {
           const next = new Set(previous);
@@ -85,7 +95,7 @@ export function useProject(): Project {
   }, []);
 
   useEffect(() => {
-    if (!api || !folder || !selected) {
+    if (!api || !folder || !target) {
       setContext(null);
       setDetail(null);
       return;
@@ -97,8 +107,10 @@ export function useProject(): Project {
     void (async () => {
       try {
         const [resolved, file] = await Promise.all([
-          api.resolveContext(folder, selected),
-          api.readFile(selected).catch(() => null),
+          api.resolveContext(folder, target.path, target.kind),
+          target.kind === "file"
+            ? api.readFile(target.path).catch(() => null)
+            : null,
         ]);
         if (id !== requestId.current) return;
         setContext(resolved);
@@ -121,19 +133,19 @@ export function useProject(): Project {
         if (id === requestId.current) setLoading(false);
       }
     })();
-  }, [api, folder, selected]);
+  }, [api, folder, target]);
 
   return {
     folder,
     tree,
-    selected,
+    target,
     context,
     detail,
     expanded,
     loading,
     error,
     openFolder,
-    selectFile,
+    select,
     toggleDir,
   };
 }

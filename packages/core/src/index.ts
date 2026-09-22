@@ -11,7 +11,8 @@ import { collectSettings, managedSettingsPathFor } from "./settings.js";
 import { type ResolvedContext, type ResolveOptions } from "./types.js";
 
 /**
- * Resolve everything a coding agent would see for `file` inside `folder`.
+ * Resolve everything a coding agent would see for `target` inside `folder`,
+ * where `target` is a single file or a whole directory.
  *
  * Walks the Managed → User → Project → Local → Directory layers: reads every
  * applicable `CLAUDE.md` (following `@path` imports), the user's memory
@@ -23,18 +24,21 @@ import { type ResolvedContext, type ResolveOptions } from "./types.js";
  * errors, they are simply absent (or a `diagnostics` string when something was
  * present but unusable).
  *
- * `file` may be absolute or relative to `folder`; the result always reports it
- * as an absolute path.
+ * `target` may be absolute or relative to `folder`; the result always reports
+ * it as an absolute path. It is a file by default, or a directory when
+ * `options.targetKind` is `"directory"` — then the folder's own `CLAUDE.md`
+ * counts and permission rules match when they could cover anything inside it.
  */
 export async function resolveContext(
   folder: string,
-  file: string,
+  target: string,
   options: ResolveOptions,
 ): Promise<ResolvedContext> {
   const platform = options.platform ?? process.platform;
   const p = pathFor(platform);
   const absoluteFolder = tidy(p, folder);
-  const absoluteFile = toAbsolute(p, absoluteFolder, file);
+  const absoluteTarget = toAbsolute(p, absoluteFolder, target);
+  const targetKind = options.targetKind ?? "file";
 
   const run: ResolveRun = {
     fs: options.fs,
@@ -42,7 +46,8 @@ export async function resolveContext(
     platform,
     homeDir: tidy(p, options.homeDir),
     folder: absoluteFolder,
-    file: absoluteFile,
+    file: absoluteTarget,
+    targetKind,
     managedDir: managedDirFor(platform),
     managedSettingsPath:
       options.managedSettingsPath ?? managedSettingsPathFor(platform),
@@ -59,7 +64,8 @@ export async function resolveContext(
 
   return {
     folder: absoluteFolder,
-    file: absoluteFile,
+    file: absoluteTarget,
+    targetKind,
     memory,
     settings,
     permissions,

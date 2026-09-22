@@ -28,7 +28,10 @@ export interface ConfigSource {
 
 export type MemoryKind = "claude-md" | "import" | "memory-index" | "memory-file";
 
-/** A CLAUDE.md / memory file that applies to the selected file. */
+/** Whether a resolution ran against a single file or a whole directory. */
+export type TargetKind = "file" | "directory";
+
+/** A CLAUDE.md / memory file that applies to the resolved target. */
 export interface MemoryEntry extends ConfigSource {
   kind: MemoryKind;
   /** Raw markdown content, if it was read. */
@@ -41,7 +44,11 @@ export interface MemoryEntry extends ConfigSource {
   importedAtLine?: number;
   /** Why it is in context, e.g. "always loaded", "loaded when this file is read". */
   reason: string;
-  /** True when it is only in context because of the selected file's directory. */
+  /**
+   * True when it is only in context because of where the target sits: a
+   * `CLAUDE.md` in the target's own directory chain rather than a layer that
+   * always loads.
+   */
   scopedToFile: boolean;
 }
 
@@ -56,7 +63,11 @@ export interface PermissionRule extends ConfigSource {
   /** Specifier inside the parentheses, if any, e.g. `./.env`. */
   specifier?: string;
   decision: PermissionDecision;
-  /** True when this rule's specifier matches the selected file's path. */
+  /**
+   * True when this rule hits the resolved target: for a file, its specifier
+   * matches the file's path; for a directory, the specifier could cover
+   * something at or below that directory.
+   */
   matchesFile: boolean;
   /** True when a higher-precedence rule overrode this one. */
   overridden: boolean;
@@ -72,7 +83,7 @@ export interface HookEntry extends ConfigSource {
   matcher?: string;
   command: string;
   timeoutSeconds?: number;
-  /** True when the matcher would fire for an Edit/Write of the selected file. */
+  /** True when the matcher would fire for an Edit/Write of the target. */
   firesOnEdit: boolean;
 }
 
@@ -99,12 +110,17 @@ export interface SettingsEntry extends ConfigSource {
   values: Record<string, unknown>;
 }
 
-/** Everything that shapes how an agent sees one file inside one folder. */
+/** Everything that shapes how an agent sees one file or folder inside a project. */
 export interface ResolvedContext {
   /** Absolute path of the project folder the resolution ran against. */
   folder: string;
-  /** Absolute path of the file whose context was resolved. */
+  /**
+   * Absolute path of the resolved target. Named `file` for compatibility, but
+   * it is a directory when `targetKind` is `"directory"`.
+   */
   file: string;
+  /** Whether `file` is a single file or a directory. */
+  targetKind: TargetKind;
   memory: MemoryEntry[];
   settings: SettingsEntry[];
   permissions: PermissionRule[];
@@ -128,6 +144,11 @@ export interface FileSystemReader {
 
 export interface ResolveOptions {
   fs: FileSystemReader;
+  /**
+   * Whether the target is a file or a directory; defaults to `"file"`. The
+   * caller decides — the resolver never stats the target itself.
+   */
+  targetKind?: TargetKind;
   /** Absolute home directory, used for the user layer (`~/.claude`). */
   homeDir: string;
   /** Absolute managed-settings path override; defaults per platform. */

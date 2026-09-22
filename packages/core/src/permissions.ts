@@ -1,5 +1,5 @@
 import { type ResolveRun } from "./context.js";
-import { matchGlob } from "./glob.js";
+import { globCoversDirectory, matchGlob } from "./glob.js";
 import { asStringArray, isRecord } from "./json.js";
 import { toPosix } from "./paths.js";
 import {
@@ -16,7 +16,7 @@ const DECISIONS: { key: string; decision: PermissionDecision }[] = [
   { key: "deny", decision: "deny" },
 ];
 
-/** Tools whose specifier is a filesystem path, so it can match the selected file. */
+/** Tools whose specifier is a filesystem path, so it can match the target. */
 const FILE_TOOLS = new Set([
   "Read",
   "Edit",
@@ -43,16 +43,20 @@ export function parseRuleText(rule: string): ParsedRule {
 }
 
 /**
- * Does the rule's path specifier cover the selected file?
+ * Does the rule's path specifier hit the resolved target?
  *
  * `//abs/path` is absolute, `~/x` is home-relative, and `/x`, `./x` and bare
  * `x` are all relative to the project root.
+ *
+ * For a file target the specifier has to match the file itself. For a
+ * directory target it is enough that the specifier *could* cover something at
+ * or below the directory, which is what `globCoversDirectory` decides.
  */
-export function specifierMatchesFile(
+export function specifierMatchesTarget(
   run: ResolveRun,
   tool: string,
   specifier: string | undefined,
-  relativeFile: string,
+  relativeTarget: string,
 ): boolean {
   if (!FILE_TOOLS.has(tool)) return false;
   if (specifier === undefined) return true;
@@ -60,19 +64,20 @@ export function specifierMatchesFile(
   const raw = specifier.trim();
   if (raw.length === 0) return true;
 
-  const absoluteFile = toPosix(run.file);
+  const hits = run.targetKind === "directory" ? globCoversDirectory : matchGlob;
+  const absoluteTarget = toPosix(run.file);
   if (raw.startsWith("//")) {
-    return matchGlob(toPosix(raw.slice(1)), absoluteFile);
+    return hits(toPosix(raw.slice(1)), absoluteTarget);
   }
   if (raw.startsWith("~/")) {
-    return matchGlob(toPosix(`${run.homeDir}/${raw.slice(2)}`), absoluteFile);
+    return hits(toPosix(`${run.homeDir}/${raw.slice(2)}`), absoluteTarget);
   }
   if (run.p.isAbsolute(raw)) {
     // A single leading `/` is project-root relative in Claude Code settings.
-    return matchGlob(toPosix(raw.replace(/^\/+/, "")), relativeFile);
+    return hits(toPosix(raw.replace(/^\/+/, "")), relativeTarget);
   }
   const relativePattern = toPosix(raw.replace(/^\.\//, ""));
-  return matchGlob(relativePattern, relativeFile);
+  return hits(relativePattern, relativeTarget);
 }
 
 /** Every permission rule across the settings layers, lowest precedence first. */
@@ -80,7 +85,7 @@ export function collectPermissions(
   run: ResolveRun,
   settings: SettingsEntry[],
 ): PermissionRule[] {
-  const relativeFile = toPosix(run.p.relative(run.folder, run.file));
+  const relativeTarget = toPosix(run.p.relative(run.folder, run.file));
 
   const ordered = [...settings].sort(
     (a, b) =>
@@ -100,7 +105,7 @@ export function collectPermissions(
           rule: text,
           tool,
           decision,
-          matchesFile: specifierMatchesFile(run, tool, specifier, relativeFile),
+          matchesFile: specifierMatchesTarget(run, tool, specifier, relativeTarget),
           overridden: false,
         };
         if (specifier !== undefined) rule.specifier = specifier;

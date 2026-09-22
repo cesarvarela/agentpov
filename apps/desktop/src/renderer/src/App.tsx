@@ -152,9 +152,9 @@ export default function App() {
                 <FileTree
                   folder={folder}
                   tree={project.tree}
-                  selected={project.selected}
+                  selected={project.target?.path ?? null}
                   expanded={project.expanded}
-                  onSelectFile={project.selectFile}
+                  onSelect={project.select}
                   onToggleDir={project.toggleDir}
                 />
               </Allotment.Pane>
@@ -170,7 +170,7 @@ export default function App() {
                     context={project.context}
                     detail={project.detail}
                     folder={folder}
-                    file={project.selected}
+                    target={project.target}
                     homeDir={homeDir}
                     loading={project.loading}
                     activeSourceKey={source?.key ?? null}

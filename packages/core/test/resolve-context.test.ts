@@ -24,6 +24,20 @@ function run(
   });
 }
 
+/** Same as `run`, but resolving a directory target. */
+function runDir(
+  files: Record<string, string>,
+  dir = "src/api",
+  folder = FOLDER,
+): Promise<ResolvedContext> {
+  return resolveContext(folder, dir, {
+    fs: memfs(files),
+    homeDir: HOME,
+    platform: "linux",
+    targetKind: "directory",
+  });
+}
+
 function paths(entries: { path: string }[]): string[] {
   return entries.map((entry) => entry.path);
 }
@@ -43,7 +57,14 @@ describe("resolveContext", () => {
     const result = await run({});
     expect(result.folder).toBe(FOLDER);
     expect(result.file).toBe(`${FOLDER}/${FILE}`);
+    expect(result.targetKind).toBe("file");
     expect(result.diagnostics).toEqual([]);
+  });
+
+  it("reports a directory target as such", async () => {
+    const result = await runDir({});
+    expect(result.file).toBe(`${FOLDER}/src/api`);
+    expect(result.targetKind).toBe("directory");
   });
 
   it("keeps an already absolute file as given", async () => {
@@ -174,6 +195,33 @@ describe("resolveContext", () => {
       ]);
     });
 
+    it("includes a directory target's own CLAUDE.md", async () => {
+      const result = await runDir({
+        [`${FOLDER}/CLAUDE.md`]: "root",
+        [`${FOLDER}/src/CLAUDE.md`]: "src",
+        [`${FOLDER}/src/api/CLAUDE.md`]: "api",
+        [`${FOLDER}/src/web/CLAUDE.md`]: "web",
+      });
+
+      expect(paths(result.memory)).toEqual([
+        `${FOLDER}/CLAUDE.md`,
+        `${FOLDER}/src/CLAUDE.md`,
+        `${FOLDER}/src/api/CLAUDE.md`,
+      ]);
+      expect(result.memory[2]).toMatchObject({
+        layer: "directory",
+        scopedToFile: true,
+        reason: "loaded when files in this folder are read",
+      });
+    });
+
+    it("does not duplicate the root CLAUDE.md for the project root as target", async () => {
+      const result = await runDir({ [`${FOLDER}/CLAUDE.md`]: "root" }, ".");
+      expect(result.file).toBe(FOLDER);
+      expect(paths(result.memory)).toEqual([`${FOLDER}/CLAUDE.md`]);
+      expect(result.memory[0]?.layer).toBe("project");
+    });
+
     it("reads the project memory directory under the slugged project path", async () => {
       const slug = "-projects-acme-shop-api";
       const result = await run({
@@ -251,6 +299,56 @@ describe("resolveContext", () => {
         decision: "allow",
         layer: "project",
       });
+    });
+
+    it("matches a rule against a directory target when it could cover its files", async () => {
+      const result = await runDir({
+        [`${FOLDER}/.claude/settings.json`]: JSON.stringify({
+          permissions: {
+            deny: [
+              "Read(src/api/**)",
+              "Read(src/**/*.ts)",
+              "Read(src/api)",
+              "Read(src)",
+              "Read(**/*.env)",
+              "Read(src/web/**)",
+              "Read(src/api.ts)",
+              "Read(*.ts)",
+              "Read(//etc/hosts)",
+              "Bash(ls src/api)",
+            ],
+          },
+        }),
+      });
+
+      const matches = (rule: string): boolean | undefined =>
+        result.permissions.find((entry) => entry.rule === rule)?.matchesFile;
+
+      // The glob lands inside the folder, names it, or names an ancestor.
+      expect(matches("Read(src/api/**)")).toBe(true);
+      expect(matches("Read(src/**/*.ts)")).toBe(true);
+      expect(matches("Read(src/api)")).toBe(true);
+      expect(matches("Read(src)")).toBe(true);
+      expect(matches("Read(**/*.env)")).toBe(true);
+      // Siblings, shallower paths and non-file tools stay out.
+      expect(matches("Read(src/web/**)")).toBe(false);
+      expect(matches("Read(src/api.ts)")).toBe(false);
+      expect(matches("Read(*.ts)")).toBe(false);
+      expect(matches("Read(//etc/hosts)")).toBe(false);
+      expect(matches("Bash(ls src/api)")).toBe(false);
+    });
+
+    it("matches every path rule against the project root as target", async () => {
+      const result = await runDir(
+        {
+          [`${FOLDER}/.claude/settings.json`]: JSON.stringify({
+            permissions: { deny: ["Read(./.env)", "Read(packages/*/src)"] },
+          }),
+        },
+        ".",
+      );
+
+      expect(result.permissions.every((rule) => rule.matchesFile)).toBe(true);
     });
 
     it("orders rules by layer and marks higher-layer overrides", async () => {

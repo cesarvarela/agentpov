@@ -4,9 +4,9 @@
  * Keep this file dependency-free apart from type-only imports: it is pulled
  * into both the node and the web tsconfig.
  */
-import type { ResolvedContext } from "@agentview/core";
+import type { ResolvedContext, TargetKind } from "@agentview/core";
 
-export type { ResolvedContext };
+export type { ResolvedContext, TargetKind };
 
 /** Why a node in the tree is interesting to an agent. */
 export type FileMark = "instructions" | "mcp" | "deny";
