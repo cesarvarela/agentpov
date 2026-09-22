@@ -1,4 +1,4 @@
-import { ScrollArea } from "@agentview/ui";
+import { Badge, ScrollArea } from "@agentview/ui";
 
 import type { FileNode, TargetKind } from "../../../shared/ipc";
 import { basename, countNodes } from "../lib/paths";
@@ -10,8 +10,10 @@ import {
   FolderIcon,
 } from "./Icons";
 
-const AMBER = "#e8b04c";
-const TEAL = "#4fc7c0";
+// Colour semantics, all driven by the `--om-*` tokens in @agentview/ui: amber
+// is the app's own accent (selection, focus), orange is the Claude Code agent's
+// identity, and anything without a meaning of its own stays muted — MCP
+// included. A second agent gets its own token rather than reusing amber.
 
 interface RowProps {
   node: FileNode;
@@ -58,7 +60,7 @@ function Row({
     <>
       <div
         className={`flex h-6 w-full items-center ${
-          isSelected ? "bg-[#2a2418]" : "hover:bg-om-raised/60"
+          isSelected ? "bg-om-amber-bg" : "hover:bg-om-raised/60"
         }`}
         style={{ paddingLeft: padding }}
       >
@@ -107,12 +109,10 @@ function Row({
             {isDir ? "/" : ""}
           </span>
           {isDenied ? (
-            <span className="text-om-deny rounded-[4px] border border-[#4a2c2c] bg-[#2a1a1a] px-1.5 text-[10px] leading-4">
-              deny
-            </span>
+            <Badge variant="deny">deny</Badge>
           ) : null}
-          {hasInstructions ? <Dot color={AMBER} /> : null}
-          {hasMcp ? <Dot color={TEAL} /> : null}
+          {hasInstructions ? <Dot className="bg-om-orange" /> : null}
+          {hasMcp ? <Dot className="bg-om-muted" /> : null}
           {isDir && !isOpen && childCount > 0 ? (
             <span className="text-om-muted text-[11px]">{childCount}</span>
           ) : null}
@@ -192,13 +192,13 @@ export function FileTree({
 
       <div className="border-om-border flex shrink-0 flex-col gap-1.5 border-t px-3 py-2">
         <div className="flex items-center gap-1.5">
-          <Dot color={AMBER} />
+          <Dot className="bg-om-orange" />
           <span className="text-om-muted text-[11px]">
             carries instructions or rules
           </span>
         </div>
         <div className="flex items-center gap-1.5">
-          <Dot color={TEAL} />
+          <Dot className="bg-om-muted" />
           <span className="text-om-muted text-[11px]">declares MCP servers</span>
         </div>
       </div>

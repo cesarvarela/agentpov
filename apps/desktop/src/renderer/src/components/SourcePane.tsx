@@ -186,7 +186,7 @@ export function SourcePane({
                 source.importedAt?.line ?? 1,
               )
             }
-            className="text-om-teal cursor-pointer truncate hover:underline"
+            className="text-om-text cursor-pointer truncate hover:underline"
           >
             imported at line {source.importedAt.line} of{" "}
             {basename(source.importedAt.parent)}
@@ -219,7 +219,7 @@ export function SourcePane({
                   <span
                     className={`sticky left-0 w-[46px] shrink-0 border-l-2 pr-2.5 text-right text-[11px] select-none ${
                       active
-                        ? "border-om-amber text-om-amber bg-[#2a2418]"
+                        ? "border-om-amber text-om-amber bg-om-amber-bg"
                         : "bg-om-panel text-om-muted border-transparent"
                     }`}
                   >

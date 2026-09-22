@@ -252,7 +252,9 @@ export function effectiveItems(
     });
   }
 
-  const directory = instructions.filter((entry) => entry.layer === "directory");
+  // Not "directory-layer files" but "files Claude Code only pulls in when it
+  // reads something under them" — the loading mode says so directly.
+  const directory = instructions.filter((entry) => entry.loading === "on-read");
   if (directory.length > 0) {
     items.push({
       title: "Directory instructions, on read",

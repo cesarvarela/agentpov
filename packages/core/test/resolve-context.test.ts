@@ -120,10 +120,12 @@ describe("resolveContext", () => {
       expect(result.memory[0]).toMatchObject({
         scopedToFile: false,
         reason: "always loaded",
+        loading: "always",
       });
       expect(result.memory[1]).toMatchObject({
         scopedToFile: true,
         reason: "loaded when this file is read",
+        loading: "on-read",
       });
     });
 
@@ -159,6 +161,7 @@ describe("resolveContext", () => {
         importedAtLine: 3,
         reason: "inlined at line 3 of CLAUDE.md",
         scopedToFile: false,
+        loading: "always",
       });
       expect(result.memory[2]).toMatchObject({
         importedBy: `${FOLDER}/docs/style.md`,
@@ -167,6 +170,24 @@ describe("resolveContext", () => {
       });
       expect(result.memory[3]?.importedAtLine).toBe(4);
       expect(result.diagnostics).toEqual([]);
+    });
+
+    it("gives an import the loading mode of the file that imports it", async () => {
+      const result = await run({
+        [`${FOLDER}/CLAUDE.md`]: "See @docs/always.md for rules",
+        [`${FOLDER}/docs/always.md`]: "always",
+        [`${FOLDER}/src/api/CLAUDE.md`]: "See @./scoped.md for rules",
+        [`${FOLDER}/src/api/scoped.md`]: "scoped",
+      });
+
+      expect(
+        result.memory.map((entry) => [entry.path, entry.loading]),
+      ).toEqual([
+        [`${FOLDER}/CLAUDE.md`, "always"],
+        [`${FOLDER}/docs/always.md`, "always"],
+        [`${FOLDER}/src/api/CLAUDE.md`, "on-read"],
+        [`${FOLDER}/src/api/scoped.md`, "on-read"],
+      ]);
     });
 
     it("ignores email addresses and fenced code when scanning for imports", async () => {
@@ -212,6 +233,7 @@ describe("resolveContext", () => {
         layer: "directory",
         scopedToFile: true,
         reason: "loaded when files in this folder are read",
+        loading: "on-read",
       });
     });
 
@@ -235,12 +257,14 @@ describe("resolveContext", () => {
         kind: "memory-index",
         layer: "user",
         reason: "always loaded",
+        loading: "always",
         content: "- [Ports](ports.md)",
       });
       expect(result.memory[1]).toMatchObject({
         kind: "memory-file",
         layer: "user",
         reason: "recalled on demand",
+        loading: "on-demand",
         bytes: 8,
       });
     });

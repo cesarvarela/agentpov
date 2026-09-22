@@ -8,7 +8,11 @@ import {
   type ResolveRun,
 } from "./context.js";
 import { descendingChain, toAbsolute } from "./paths.js";
-import { type ConfigLayer, type MemoryEntry } from "./types.js";
+import {
+  type ConfigLayer,
+  type MemoryEntry,
+  type MemoryLoading,
+} from "./types.js";
 
 const MAX_IMPORT_DEPTH = 5;
 
@@ -81,6 +85,7 @@ async function readMemoryFile(
   candidate: Candidate,
   kind: MemoryEntry["kind"],
   reason: string,
+  loading: MemoryLoading,
   extra?: { importedBy: string; importedAtLine: number },
 ): Promise<MemoryEntry | null> {
   const content = await readText(run, candidate.path);
@@ -92,6 +97,7 @@ async function readMemoryFile(
     content,
     bytes: await sizeOf(run, candidate.path, content),
     reason,
+    loading,
     scopedToFile: candidate.scopedToFile,
   };
   if (extra) {
@@ -122,6 +128,9 @@ async function collectImports(
       { path: target, layer: parent.layer, scopedToFile: parent.scopedToFile },
       "import",
       `inlined at line ${reference.line} of ${parentName}`,
+      // An import is inlined into its parent, so it reaches context exactly
+      // when the parent does.
+      parent.loading,
       { importedBy: parent.path, importedAtLine: reference.line },
     );
     if (!entry) {
@@ -160,6 +169,7 @@ async function collectMemoryDirectory(run: ResolveRun): Promise<MemoryEntry[]> {
       { path: run.p.join(dir, index), layer: "user", scopedToFile: false },
       "memory-index",
       REASON_ALWAYS,
+      "always",
     );
     if (entry) out.push(entry);
   }
@@ -170,6 +180,7 @@ async function collectMemoryDirectory(run: ResolveRun): Promise<MemoryEntry[]> {
       { path: run.p.join(dir, name), layer: "user", scopedToFile: false },
       "memory-file",
       REASON_RECALLED,
+      "on-demand",
     );
     if (entry) out.push(entry);
   }
@@ -210,7 +221,14 @@ export async function collectMemory(run: ResolveRun): Promise<MemoryEntry[]> {
       if (seen.has(candidate.path)) continue;
       seen.add(candidate.path);
       const reason = candidate.scopedToFile ? scopedReason : REASON_ALWAYS;
-      const entry = await readMemoryFile(run, candidate, "claude-md", reason);
+      const loading: MemoryLoading = candidate.scopedToFile ? "on-read" : "always";
+      const entry = await readMemoryFile(
+        run,
+        candidate,
+        "claude-md",
+        reason,
+        loading,
+      );
       if (!entry) continue;
       out.push(entry);
       out.push(...(await collectImports(run, entry, seen, 1)));

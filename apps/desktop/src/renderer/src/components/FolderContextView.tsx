@@ -19,6 +19,8 @@ import type { SourceTarget } from "../hooks/useSource";
 import {
   Diagnostics,
   EmptyRow,
+  LoadingGlyph,
+  LoadingLegend,
   Panel,
   PermissionRow,
   RowButton,
@@ -300,12 +302,13 @@ export function FolderContextView({
                 <Badge className="w-[66px] shrink-0 justify-center">
                   {layerLabel(entry.layer)}
                 </Badge>
+                <LoadingGlyph loading={entry.loading} reason={entry.reason} />
                 <span className="w-[150px] shrink-0 truncate font-mono text-xs">
                   {basename(entry.path)}
                 </span>
                 <span className="text-om-muted min-w-0 flex-1 truncate text-[11px]">
                   {entry.content?.split("\n").find((line) => line.trim() !== "")
-                    ?.trim() ?? entry.reason}
+                    ?.trim()}
                 </span>
               </RowButton>
             ))
@@ -358,7 +361,7 @@ export function FolderContextView({
         </Panel>
 
         <Panel
-          icon={<HookIcon className="text-om-teal" />}
+          icon={<HookIcon className="text-om-muted" />}
           title="Hooks"
           note={isRoot
             ? count(hooks.length, "hook")
@@ -384,7 +387,7 @@ export function FolderContextView({
                     })
                   }
                 >
-                  <span className="text-om-teal w-[92px] shrink-0 text-[11px] font-medium">
+                  <span className="text-om-text w-[92px] shrink-0 text-[11px] font-medium">
                     {hook.event}
                   </span>
                   <span className="text-om-muted w-[86px] shrink-0 truncate font-mono text-[11px]">
@@ -488,7 +491,7 @@ export function FolderContextView({
         </Panel>
 
         <Panel
-          icon={<ExternalLinkIcon className="text-om-teal" />}
+          icon={<ExternalLinkIcon className="text-om-muted" />}
           title="MCP servers"
           note={isRoot
             ? count(servers.length, "server")
@@ -536,6 +539,8 @@ export function FolderContextView({
         </Panel>
 
         <Diagnostics diagnostics={context?.diagnostics ?? []} />
+
+        {context ? <LoadingLegend /> : null}
       </div>
     </ScrollArea>
   );

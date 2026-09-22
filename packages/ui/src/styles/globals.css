@@ -22,11 +22,36 @@
   --om-border: #2a2f38;
   --om-text: #e6e8ec;
   --om-muted: #8b919c;
+  /*
+   * One meaning per colour: amber is the app's own accent (logo, name,
+   * selection, focus), orange is the Claude Code agent's identity, teal marks
+   * instructions that are always loaded, violet marks the lazy ones, and
+   * allow/deny are verdicts. "Ask" is deliberately colourless — it is the
+   * common default and uses muted text.
+   */
   --om-amber: #e8b04c;
   --om-teal: #4fc7c0;
+  --om-orange: #d97757;
+  --om-violet: #a78bfa;
   --om-allow: #5fbf7a;
-  --om-ask: #e8b04c;
   --om-deny: #e5645f;
+
+  /*
+   * Badge tints, derived rather than hand-picked: 12% of the hue over the page
+   * background for the fill, 30% for the border.
+   */
+  --om-amber-bg: color-mix(in srgb, var(--om-amber) 12%, var(--om-bg));
+  --om-amber-border: color-mix(in srgb, var(--om-amber) 30%, var(--om-bg));
+  --om-teal-bg: color-mix(in srgb, var(--om-teal) 12%, var(--om-bg));
+  --om-teal-border: color-mix(in srgb, var(--om-teal) 30%, var(--om-bg));
+  --om-orange-bg: color-mix(in srgb, var(--om-orange) 12%, var(--om-bg));
+  --om-orange-border: color-mix(in srgb, var(--om-orange) 30%, var(--om-bg));
+  --om-violet-bg: color-mix(in srgb, var(--om-violet) 12%, var(--om-bg));
+  --om-violet-border: color-mix(in srgb, var(--om-violet) 30%, var(--om-bg));
+  --om-allow-bg: color-mix(in srgb, var(--om-allow) 12%, var(--om-bg));
+  --om-allow-border: color-mix(in srgb, var(--om-allow) 30%, var(--om-bg));
+  --om-deny-bg: color-mix(in srgb, var(--om-deny) 12%, var(--om-bg));
+  --om-deny-border: color-mix(in srgb, var(--om-deny) 30%, var(--om-bg));
 
   --om-font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", sans-serif;
@@ -140,9 +165,24 @@
   --color-om-muted: var(--om-muted);
   --color-om-amber: var(--om-amber);
   --color-om-teal: var(--om-teal);
+  --color-om-orange: var(--om-orange);
+  --color-om-violet: var(--om-violet);
   --color-om-allow: var(--om-allow);
-  --color-om-ask: var(--om-ask);
   --color-om-deny: var(--om-deny);
+
+  /* derived tints: bg-om-teal-bg, border-om-teal-border, ... */
+  --color-om-amber-bg: var(--om-amber-bg);
+  --color-om-amber-border: var(--om-amber-border);
+  --color-om-teal-bg: var(--om-teal-bg);
+  --color-om-teal-border: var(--om-teal-border);
+  --color-om-orange-bg: var(--om-orange-bg);
+  --color-om-orange-border: var(--om-orange-border);
+  --color-om-violet-bg: var(--om-violet-bg);
+  --color-om-violet-border: var(--om-violet-border);
+  --color-om-allow-bg: var(--om-allow-bg);
+  --color-om-allow-border: var(--om-allow-border);
+  --color-om-deny-bg: var(--om-deny-bg);
+  --color-om-deny-border: var(--om-deny-border);
 }
 
 @layer base {

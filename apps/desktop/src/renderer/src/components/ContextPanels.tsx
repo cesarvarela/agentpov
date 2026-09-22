@@ -3,6 +3,7 @@ import { Badge } from "@agentview/ui";
 import type {
   ConfigLayer,
   MemoryEntry,
+  MemoryLoading,
   PermissionRule,
   TargetKind,
 } from "@agentview/core";
@@ -15,7 +16,13 @@ import {
   projectPath,
   relativeTo,
 } from "../lib/paths";
-import { ImportIcon, WarningIcon } from "./Icons";
+import {
+  ImportIcon,
+  LoadAlwaysIcon,
+  LoadOnDemandIcon,
+  LoadOnReadIcon,
+  WarningIcon,
+} from "./Icons";
 
 /** Badge colour per permission decision. */
 export const DECISION_VARIANT = {
@@ -23,6 +30,98 @@ export const DECISION_VARIANT = {
   ask: "ask",
   deny: "deny",
 } as const;
+
+/**
+ * Single source of truth for how a loading mode is drawn: glyph, colour class
+ * and the wording used in the tooltip, the aria label and the legend.
+ *
+ * Teal/solid is always in context; the two lazy modes share violet and are told
+ * apart by shape — half-filled is pulled in when a file under it is read,
+ * dashed is only recalled on demand. Amber is the app's accent and orange is
+ * agent identity, so neither appears here.
+ */
+export const LOADING_MODES = {
+  always: {
+    Icon: LoadAlwaysIcon,
+    className: "text-om-teal",
+    label: "always",
+    legend: "always loaded",
+  },
+  "on-read": {
+    Icon: LoadOnReadIcon,
+    className: "text-om-violet",
+    label: "on read",
+    legend: "loaded when a file under it is read",
+  },
+  "on-demand": {
+    Icon: LoadOnDemandIcon,
+    className: "text-om-violet",
+    label: "on demand",
+    legend: "recalled on demand",
+  },
+} as const satisfies Record<
+  MemoryLoading,
+  {
+    Icon: (props: { className?: string }) => ReactNode;
+    className: string;
+    label: string;
+    legend: string;
+  }
+>;
+
+export const LOADING_MODE_ORDER: MemoryLoading[] = [
+  "always",
+  "on-read",
+  "on-demand",
+];
+
+/**
+ * How Claude Code pulls this file into context, as a 12px glyph in a fixed
+ * 16px slot so rows stay aligned. The entry's `reason` rides along as the
+ * tooltip; `LoadingLegend` spells the three glyphs out.
+ */
+export function LoadingGlyph({
+  loading,
+  reason,
+}: {
+  loading: MemoryLoading;
+  reason: string;
+}) {
+  const mode = LOADING_MODES[loading];
+  return (
+    <span
+      className={`flex w-4 shrink-0 items-center justify-center ${mode.className}`}
+      title={reason}
+      aria-label={mode.label}
+      role="img"
+    >
+      <mode.Icon />
+    </span>
+  );
+}
+
+/**
+ * What the three loading glyphs mean. Rendered once at the bottom of the
+ * scrolled pane, so it inherits the pane's horizontal padding and lines up with
+ * the panel edges; it scrolls with the content rather than sticking.
+ */
+export function LoadingLegend() {
+  return (
+    <div className="text-om-muted flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 pt-0.5 text-[11px]">
+      {LOADING_MODE_ORDER.map((loading) => {
+        const mode = LOADING_MODES[loading];
+        return (
+          <span key={loading} className="flex items-center gap-1.5">
+            <span className={`flex w-4 shrink-0 items-center justify-center ${mode.className}`}>
+              <mode.Icon />
+            </span>
+            {mode.legend}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
 /**
  * Layers listed highest-precedence first. Kept as a local literal: a runtime
@@ -112,7 +211,7 @@ export function RowButton({
       title={title}
       className={`border-om-border/60 flex w-full shrink-0 cursor-pointer items-center gap-2.5 border-t text-left transition-colors first:border-t-0 ${height} ${padding} ${
         active
-          ? "bg-[#2a2418] shadow-[inset_2px_0_0_var(--om-amber)]"
+          ? "bg-om-amber-bg shadow-[inset_2px_0_0_var(--om-amber)]"
           : `${bg ?? ""} hover:bg-om-raised`
       }`}
     >
@@ -135,6 +234,10 @@ export function InstructionRow({
   active: boolean;
   onOpen: () => void;
 }) {
+  // Directory-layer files get no colour of their own: the DIRECTORY badge and
+  // the loading glyph already say what they are, and the folder view groups
+  // them under "added by this folder". They only show a shorter, project-
+  // relative path.
   const isDirectory = entry.layer === "directory";
   const size = formatBytes(entry.bytes);
 
@@ -142,16 +245,14 @@ export function InstructionRow({
     return (
       <RowButton
         active={active}
-        bg="bg-[#141721]"
         height="h-7"
         padding="pr-3 pl-[34px]"
         title={entry.path}
         onClick={onOpen}
       >
-        <ImportIcon className="text-om-teal shrink-0" />
-        <Badge variant="teal" className="w-[52px] shrink-0 justify-center">
-          import
-        </Badge>
+        <ImportIcon className="text-om-muted shrink-0" />
+        <Badge className="w-[52px] shrink-0 justify-center">import</Badge>
+        <LoadingGlyph loading={entry.loading} reason={entry.reason} />
         <span className="text-om-muted min-w-0 flex-1 truncate font-mono text-xs">
           {displayPath(entry.path, folder, homeDir)}
         </span>
@@ -169,34 +270,20 @@ export function InstructionRow({
   return (
     <RowButton
       active={active}
-      bg={isDirectory ? "bg-[#1c1d1a]" : undefined}
       height="h-[30px]"
       title={entry.path}
       onClick={onOpen}
     >
-      <Badge
-        variant={isDirectory ? "amber" : "default"}
-        className="w-[66px] shrink-0 justify-center"
-      >
+      <Badge className="w-[66px] shrink-0 justify-center">
         {layerLabel(entry.layer)}
       </Badge>
-      <span
-        className={`min-w-0 flex-1 truncate font-mono text-xs ${
-          isDirectory ? "text-om-amber" : "text-om-text"
-        }`}
-      >
+      <LoadingGlyph loading={entry.loading} reason={entry.reason} />
+      <span className="text-om-text min-w-0 flex-1 truncate font-mono text-xs">
         {isDirectory
           ? (relativeTo(entry.path, folder) ?? entry.path)
           : projectPath(entry.path, folder, homeDir)}
       </span>
-      <span
-        className={`shrink-0 text-[11px] ${
-          isDirectory ? "text-om-amber" : "text-om-muted"
-        }`}
-      >
-        {entry.reason}
-        {size ? ` · ${size}` : ""}
-      </span>
+      <span className="text-om-muted shrink-0 text-[11px]">{size}</span>
     </RowButton>
   );
 }
@@ -251,7 +338,9 @@ export function PermissionRow({
     >
       <Badge
         variant={DECISION_VARIANT[rule.decision]}
-        className="w-[46px] shrink-0 justify-center"
+        className={`w-[46px] shrink-0 justify-center ${
+          rule.overridden ? "opacity-50" : ""
+        }`}
       >
         {rule.decision}
       </Badge>

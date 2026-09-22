@@ -14,11 +14,16 @@ const badgeVariants = cva(
     variants: {
       variant: {
         default: "border-om-border bg-om-bg text-om-muted",
-        amber: "border-[#4a3d22] bg-[#2a2418] text-om-amber",
-        teal: "border-[#2a4a48] bg-[#15292a] text-om-teal",
-        allow: "border-[#2c4a35] bg-[#1a2a20] text-om-allow",
-        ask: "border-om-border bg-om-bg text-om-muted",
-        deny: "border-[#4a2c2c] bg-[#2a1a1a] text-om-deny",
+        amber: "border-om-amber-border bg-om-amber-bg text-om-amber",
+        teal: "border-om-teal-border bg-om-teal-bg text-om-teal",
+        orange: "border-om-orange-border bg-om-orange-bg text-om-orange",
+        violet: "border-om-violet-border bg-om-violet-bg text-om-violet",
+        // Decisions are a different family from layers: a round pill says what
+        // happens, a square-ish pill says where a setting is defined. "Ask" is
+        // the common default, so it stays colourless.
+        allow: "rounded-full border-om-allow-border bg-om-allow-bg text-om-allow",
+        ask: "rounded-full border-om-border bg-om-bg text-om-muted",
+        deny: "rounded-full border-om-deny-border bg-om-deny-bg text-om-deny",
       },
     },
     defaultVariants: {

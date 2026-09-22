@@ -236,10 +236,61 @@ export function ExternalLinkIcon(props: IconProps) {
   );
 }
 
-export function Dot({ color }: { color: string }) {
+/**
+ * 12px base for the loading-mode glyphs. Smaller than `Icon` and filled rather
+ * than stroked, so the three modes read as one family: solid, half, dashed.
+ */
+function LoadIcon({ children, ...props }: IconProps) {
   return (
-    <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true">
-      <circle cx="4" cy="4" r="3" fill={color} />
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.25"
+      aria-hidden="true"
+      {...props}
+    >
+      {children}
     </svg>
+  );
+}
+
+/** Always in context: a solid disc. */
+export function LoadAlwaysIcon(props: IconProps) {
+  return (
+    <LoadIcon {...props}>
+      <circle cx="6" cy="6" r="4.25" fill="currentColor" stroke="none" />
+    </LoadIcon>
+  );
+}
+
+/** Pulled in when a file under it is read: a half-filled disc. */
+export function LoadOnReadIcon(props: IconProps) {
+  return (
+    <LoadIcon {...props}>
+      <circle cx="6" cy="6" r="4.25" />
+      <path d="M6 1.75a4.25 4.25 0 000 8.5z" fill="currentColor" stroke="none" />
+    </LoadIcon>
+  );
+}
+
+/** Recalled only on demand: a dashed ring. */
+export function LoadOnDemandIcon(props: IconProps) {
+  return (
+    <LoadIcon {...props}>
+      <circle cx="6" cy="6" r="4.25" strokeDasharray="2 1.8" />
+    </LoadIcon>
+  );
+}
+
+/** 6px status dot; the caller supplies the colour as a `bg-*` class. */
+export function Dot({ className }: { className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`size-1.5 shrink-0 rounded-full ${className ?? "bg-om-muted"}`}
+    />
   );
 }

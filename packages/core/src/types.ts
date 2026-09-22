@@ -28,6 +28,15 @@ export interface ConfigSource {
 
 export type MemoryKind = "claude-md" | "import" | "memory-index" | "memory-file";
 
+/**
+ * How Claude Code pulls the file into context.
+ *
+ * - `always`: in context from the start of every session.
+ * - `on-read`: pulled in when a file at or under its directory is read.
+ * - `on-demand`: only recalled when something asks for it.
+ */
+export type MemoryLoading = "always" | "on-read" | "on-demand";
+
 /** Whether a resolution ran against a single file or a whole directory. */
 export type TargetKind = "file" | "directory";
 
@@ -44,6 +53,8 @@ export interface MemoryEntry extends ConfigSource {
   importedAtLine?: number;
   /** Why it is in context, e.g. "always loaded", "loaded when this file is read". */
   reason: string;
+  /** Machine-readable form of `reason`: how the file reaches context. */
+  loading: MemoryLoading;
   /**
    * True when it is only in context because of where the target sits: a
    * `CLAUDE.md` in the target's own directory chain rather than a layer that

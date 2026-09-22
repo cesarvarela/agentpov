@@ -35,8 +35,14 @@ Story frames are 1600×620; screen frames are 1440×900.
 - `canvas.json` is the layout for the shared canvas: https://claude.ai/artifact/NU4Tk6ieNM8j5TNimcNtHF
 - `../agentview-mocks.html` is the full editable canvas bundle (large; open in a browser).
 - Design tokens: bg `#101216`, panel `#171a20`, raised `#1e222a`, border `#2a2f38`,
-  text `#e6e8ec`, muted `#8b919c`, amber accent `#e8b04c` (applies/selected),
-  teal `#4fc7c0` (hooks/links), allow `#5fbf7a`, ask `#e8b04c`, deny `#e5645f`.
+  text `#e6e8ec`, muted `#8b919c`. One meaning per colour: amber `#e8b04c` is
+  the app accent only (logo, app name, selection, focus), orange `#d97757` is
+  Claude Code's agent identity (agent tab, instruction dots), teal `#4fc7c0`
+  marks instructions that are always loaded, violet `#a78bfa` marks the lazy
+  ones (half-filled glyph = on read, dashed = on demand), allow `#5fbf7a` and
+  deny `#e5645f` are verdicts. Ask is muted, with no colour of its own, and
+  hooks, links and MCP have none either. Badge tints are derived from each hue
+  with `color-mix` (12% fill, 30% border), not hand-written hex.
   Fonts: IBM Plex Sans (UI), JetBrains Mono (paths/commands). Radius 6px.
 
 Re-render PNGs:
