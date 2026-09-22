@@ -25,7 +25,7 @@ and are exposed to Tailwind as `om-*` (`text-om-teal`, `bg-om-amber-bg`, ...).
 | Loaded always      | `teal`   | `#4fc7c0` | solid-disc loading glyph                                      |
 | Loaded lazily      | `violet` | `#a78bfa` | half-disc (on read) and dashed-ring (on demand) glyphs        |
 | Permission allow   | `allow`  | `#5fbf7a` | allow badges                                                  |
-| Permission deny    | `deny`   | `#e5645f` | deny badges, denied files in the tree                         |
+| Permission deny    | `deny`   | `#e5645f` | deny badges, denied files in the tree, disabled MCP servers    |
 
 Things that deliberately have **no color**: `ask` decisions (muted), hooks,
 links, MCP servers, layer badges (USER, PROJECT, ...). They are structure, not

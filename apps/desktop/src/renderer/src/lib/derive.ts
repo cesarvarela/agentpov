@@ -13,10 +13,26 @@ export function layerLabel(layer: ConfigLayer): string {
   return layer.charAt(0).toUpperCase() + layer.slice(1);
 }
 
+/**
+ * Instruction files: every CLAUDE.md, every `.claude/rules` file and the
+ * `@imports` they pull in. Rules sit here rather than in the Memory panel —
+ * they are authored instructions that load at launch (or on read, when they
+ * declare `paths:`), not recalled memory.
+ */
 export function instructionEntries(ctx: ResolvedContext): MemoryEntry[] {
-  return ctx.memory.filter(
-    (entry) => entry.kind === "claude-md" || entry.kind === "import",
+  return (
+    ctx.memory.filter(
+      (entry) =>
+        entry.kind === "claude-md" ||
+        entry.kind === "rule" ||
+        entry.kind === "import",
+    )
   );
+}
+
+/** Just the `.claude/rules` files, in precedence order. */
+export function ruleEntries(ctx: ResolvedContext): MemoryEntry[] {
+  return ctx.memory.filter((entry) => entry.kind === "rule");
 }
 
 export function memoryEntries(ctx: ResolvedContext): MemoryEntry[] {
@@ -42,6 +58,10 @@ export interface FolderMemorySplit {
  * `directory`-layer file (a CLAUDE.md picked up because of where the target
  * sits) that lives at or under `folder`. A directory CLAUDE.md between the
  * project root and `folder` is an ancestor's, so it counts as inherited.
+ *
+ * The test is the layer, so it holds for `.claude/rules` files too: a project-
+ * layer rule loads for the whole project and is inherited here, however
+ * narrowly its `paths:` globs happen to point at this folder.
  *
  * @param memory entries from the resolved context, in precedence order.
  * @param folder absolute path of the selected folder.
@@ -133,6 +153,42 @@ export function ruleTargetsFolder(
   return literal === folderPath || literal.startsWith(`${folderPath}/`);
 }
 
+/** Strongest first: the merged rule set is evaluated in this order. */
+const DECISION_STRENGTH: PermissionDecision[] = ["deny", "ask", "allow"];
+
+/**
+ * Do two rules compete for the selected target? Mirrors core's `competes`: the
+ * same tool, and either both hit the target or the rule text is identical (for
+ * tools whose specifier is not a path).
+ */
+function competes(a: PermissionRule, b: PermissionRule): boolean {
+  if (a.tool !== b.tool) return false;
+  if (a.matchesFile && b.matchesFile) return true;
+  return a.rule === b.rule;
+}
+
+/**
+ * The decision that overrode `rule`, for the row's annotation. Core records
+ * only the winner's layer in `overriddenBy`, so the decision is recovered the
+ * same way core picked it: the strongest decision among the competing rules.
+ * Undefined when the rule was not overridden.
+ */
+export function overridingDecisionFor(
+  rules: PermissionRule[],
+  rule: PermissionRule,
+): PermissionDecision | undefined {
+  if (!rule.overridden) return undefined;
+  const mine = DECISION_STRENGTH.indexOf(rule.decision);
+  return DECISION_STRENGTH.find(
+    (decision) =>
+      DECISION_STRENGTH.indexOf(decision) < mine &&
+      rules.some(
+        (other) =>
+          other !== rule && other.decision === decision && competes(rule, other),
+      ),
+  );
+}
+
 /** Rules that apply to the selected file and have not been overridden. */
 function liveRulesFor(ctx: ResolvedContext, tool: string): PermissionRule[] {
   return ctx.permissions.filter(
@@ -140,31 +196,36 @@ function liveRulesFor(ctx: ResolvedContext, tool: string): PermissionRule[] {
   );
 }
 
-/** Deny beats allow beats ask; nothing matching means the agent asks. */
+/**
+ * Deny beats ask beats allow — the order the merged rule set is evaluated in.
+ * Nothing matching means the agent asks.
+ */
 export function verdictFor(
   ctx: ResolvedContext,
   tool: string,
 ): PermissionDecision {
   const rules = liveRulesFor(ctx, tool);
-  if (rules.some((rule) => rule.decision === "deny")) return "deny";
-  if (rules.some((rule) => rule.decision === "allow")) return "allow";
+  for (const decision of DECISION_STRENGTH) {
+    if (rules.some((rule) => rule.decision === decision)) return decision;
+  }
   return "ask";
 }
 
 /**
  * The rule that decides the verdict for `tool` on the selected file: the first
- * live deny if any, otherwise the first live allow. Undefined when nothing
- * matches, which is the "ask" case.
+ * live rule in deny → ask → allow order. Undefined when nothing matches, which
+ * is the "ask" case with no rule behind it.
  */
 export function winningRuleFor(
   ctx: ResolvedContext,
   tool: string,
 ): PermissionRule | undefined {
   const rules = liveRulesFor(ctx, tool);
-  return (
-    rules.find((rule) => rule.decision === "deny") ??
-    rules.find((rule) => rule.decision === "allow")
-  );
+  for (const decision of DECISION_STRENGTH) {
+    const rule = rules.find((candidate) => candidate.decision === decision);
+    if (rule) return rule;
+  }
+  return undefined;
 }
 
 /**
@@ -205,14 +266,27 @@ export function effectiveItems(
   const items: EffectiveItem[] = [];
   const instructions = instructionEntries(ctx);
 
+  // Rules get their own line below, whatever layer they came from.
   const userInstructions = instructions.filter(
-    (entry) => entry.layer === "user" || entry.layer === "managed",
+    (entry) =>
+      entry.kind !== "rule" &&
+      (entry.layer === "user" || entry.layer === "managed"),
   );
   if (userInstructions.length > 0) {
     items.push({
       title: "System & user instructions",
       detail: userInstructions
         .map((entry) => displayPath(entry.path, null, homeDir))
+        .join(", "),
+    });
+  }
+
+  const rules = instructions.filter((entry) => entry.kind === "rule");
+  if (rules.length > 0) {
+    items.push({
+      title: `${rules.length} rule file${rules.length === 1 ? "" : "s"}`,
+      detail: rules
+        .map((entry) => relativeTo(entry.path, ctx.folder) ?? displayPath(entry.path, null, homeDir))
         .join(", "),
     });
   }
@@ -254,7 +328,9 @@ export function effectiveItems(
 
   // Not "directory-layer files" but "files Claude Code only pulls in when it
   // reads something under them" — the loading mode says so directly.
-  const directory = instructions.filter((entry) => entry.loading === "on-read");
+  const directory = instructions.filter(
+    (entry) => entry.loading === "on-read" && entry.kind !== "rule",
+  );
   if (directory.length > 0) {
     items.push({
       title: "Directory instructions, on read",
@@ -311,15 +387,18 @@ export function explainLines(
 
   const overridden = firstOverridden(ctx);
   if (overridden) {
+    const stronger = overridingDecisionFor(ctx.permissions, overridden);
     lines.push({
       tone: deny ? "muted" : "primary",
       text: `Why does ${overridden.rule} behave differently than ${layerLabel(
         overridden.layer,
-      )} settings say? → ${
+      )} settings say? → Claude Code merges every layer into one rule set and reads it deny → ask → allow, so the ${
+        stronger ?? "stronger"
+      } in ${
         overridden.overriddenBy
-          ? `${layerLabel(overridden.overriddenBy)} settings`
-          : "a higher layer"
-      } overrode the ${overridden.decision} from ${layerLabel(overridden.layer)}.`,
+          ? `${layerLabel(overridden.overriddenBy).toLowerCase()} settings`
+          : "another settings file"
+      } wins over this ${overridden.decision}.`,
     });
   }
 
@@ -364,7 +443,11 @@ export function contextMarkdown(
     const notes = [
       rule.matchesFile ? "matches this file" : null,
       rule.overridden
-        ? `overridden by ${rule.overriddenBy ? layerLabel(rule.overriddenBy) : "a higher layer"}`
+        ? `overridden by ${overridingDecisionFor(ctx.permissions, rule) ?? "a stronger rule"} in ${
+            rule.overriddenBy
+              ? `${layerLabel(rule.overriddenBy).toLowerCase()} settings`
+              : "another settings file"
+          }`
         : null,
     ].filter(Boolean);
     lines.push(

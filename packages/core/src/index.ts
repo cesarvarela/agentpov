@@ -60,7 +60,7 @@ export async function resolveContext(
   const hooks = collectHooks(settings);
   const skills = await collectSkills(run);
   const agents = await collectAgents(run);
-  const mcpServers = await collectMcpServers(run);
+  const mcpServers = await collectMcpServers(run, settings);
 
   return {
     folder: absoluteFolder,

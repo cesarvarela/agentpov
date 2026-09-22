@@ -375,7 +375,7 @@ describe("resolveContext", () => {
       expect(result.permissions.every((rule) => rule.matchesFile)).toBe(true);
     });
 
-    it("orders rules by layer and marks higher-layer overrides", async () => {
+    it("orders rules by layer but lets ask beat a higher-layer allow", async () => {
       const result = await run({
         [`${FOLDER}/.claude/settings.json`]: JSON.stringify({
           permissions: { ask: ["Bash(npm run *)"] },
@@ -389,14 +389,16 @@ describe("resolveContext", () => {
         "project",
         "local",
       ]);
+      // Rules from every layer merge into one set evaluated deny → ask →
+      // allow, so the project `ask` wins and the local `allow` loses.
       expect(result.permissions[0]).toMatchObject({
         decision: "ask",
-        overridden: true,
-        overriddenBy: "local",
+        overridden: false,
       });
       expect(result.permissions[1]).toMatchObject({
         decision: "allow",
-        overridden: false,
+        overridden: true,
+        overriddenBy: "project",
       });
     });
 
@@ -498,12 +500,16 @@ describe("resolveContext", () => {
           path: `${HOME}/.claude/skills/review/SKILL.md`,
           layer: "user",
           name: "code-review",
+          shortName: "review",
+          source: "personal",
           description: "Review a diff",
         },
         {
           path: `${FOLDER}/.claude/skills/deploy/SKILL.md`,
           layer: "project",
           name: "deploy",
+          shortName: "deploy",
+          source: "project",
         },
       ]);
       expect(result.agents).toEqual([
@@ -533,7 +539,17 @@ describe("resolveContext", () => {
         }),
       });
 
-      expect(result.mcpServers).toEqual([
+      // Approval state and the rest of the entry shape are covered in
+      // `discovery.test.ts`; here only the layering and ordering matter.
+      expect(
+        result.mcpServers.map(({ path, layer, name, transport, target }) => ({
+          path,
+          layer,
+          name,
+          transport,
+          target,
+        })),
+      ).toEqual([
         {
           path: `${HOME}/.claude.json`,
           layer: "user",

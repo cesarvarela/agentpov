@@ -11,6 +11,7 @@ import {
   layerLabel,
   matchingDenyRules,
   memoryEntries,
+  overridingDecisionFor,
   verdictFor,
   winningRuleFor,
 } from "../lib/derive";
@@ -122,9 +123,11 @@ function FileContextView({
   const name = basename(file);
 
   const instructions = context ? instructionEntries(context) : [];
+  // CLAUDE.md files and `.claude/rules` files; imports are counted inside them.
   const instructionFiles = instructions.filter(
-    (entry) => entry.kind === "claude-md",
+    (entry) => entry.kind === "claude-md" || entry.kind === "rule",
   ).length;
+  const ruleFiles = instructions.filter((entry) => entry.kind === "rule").length;
   const memory = context ? memoryEntries(context) : [];
   const hooks = context ? editHooks(context) : [];
   const verdicts = context
@@ -191,7 +194,11 @@ function FileContextView({
           title="Instructions"
           note={
             instructions.length > 0
-              ? `${instructionFiles} files · ordered by precedence, lowest first`
+              ? `${instructionFiles} files${
+                  ruleFiles > 0
+                    ? ` · ${ruleFiles} rule${ruleFiles === 1 ? "" : "s"}`
+                    : ""
+                } · ordered by precedence, lowest first`
               : undefined
           }
         >
@@ -360,6 +367,10 @@ function FileContextView({
                       key={key}
                       rule={rule}
                       targetKind="file"
+                      strongerDecision={overridingDecisionFor(
+                        context.permissions,
+                        rule,
+                      )}
                       folder={folder}
                       homeDir={homeDir}
                       active={activeSourceKey === key}

@@ -26,7 +26,13 @@ export interface ConfigSource {
   layer: ConfigLayer;
 }
 
-export type MemoryKind = "claude-md" | "import" | "memory-index" | "memory-file";
+export type MemoryKind =
+  | "claude-md"
+  /** A `.claude/rules/*.md` file. */
+  | "rule"
+  | "import"
+  | "memory-index"
+  | "memory-file";
 
 /**
  * How Claude Code pulls the file into context.
@@ -47,6 +53,11 @@ export interface MemoryEntry extends ConfigSource {
   content?: string;
   /** Size in bytes, if known. */
   bytes?: number;
+  /**
+   * For `rule`: the `paths:` globs it declares, as written (project-relative,
+   * before brace expansion). Absent when the rule always loads.
+   */
+  appliesToGlobs?: string[];
   /** For `import`: absolute path of the CLAUDE.md that imported it. */
   importedBy?: string;
   /** For `import`: 1-based line of the `@path` reference in the parent. */
@@ -98,21 +109,107 @@ export interface HookEntry extends ConfigSource {
   firesOnEdit: boolean;
 }
 
+/**
+ * Where a skill came from.
+ *
+ * - `personal`: `~/.claude/skills/<name>/SKILL.md`
+ * - `synced`: `~/.claude/skills/synced/<id>/<name>/SKILL.md`, synced from
+ *   claude.ai; loads like a personal skill.
+ * - `project`: `<folder>/.claude/skills/<name>/SKILL.md`
+ * - `nested`: `<subdir>/.claude/skills/<name>/SKILL.md` for a directory below
+ *   the project root; loads once Claude touches a file there.
+ * - `plugin`: `~/.claude/plugins/**​/<plugin>/skills/<name>/SKILL.md`
+ */
+export type SkillSource = "personal" | "synced" | "project" | "nested" | "plugin";
+
+/** The file that won a name collision, and the layer it came from. */
+export type ShadowedBy = ConfigSource;
+
 export interface SkillEntry extends ConfigSource {
+  /** Display name: frontmatter `name`, namespaced for plugin/nested skills. */
   name: string;
+  /**
+   * The name the skill is invoked by, before namespacing — the skill's own
+   * directory name. Docs: for personal and project skills the command name
+   * comes from the directory, and frontmatter `name` is only a display label.
+   * Collisions are decided on this.
+   */
+  shortName: string;
   description?: string;
+  /** Frontmatter `allowed-tools`, as a list (comma/space string or YAML list). */
+  allowedTools?: string[];
+  source: SkillSource;
+  /** For `plugin`: the plugin directory name used as the namespace. */
+  plugin?: string;
+  /** For `nested`: the subdirectory, relative to the project root. */
+  subdir?: string;
+  /**
+   * Set when a higher-precedence skill of the same `shortName` wins, so the UI
+   * can strike this one through. Precedence: enterprise/managed > personal >
+   * project > bundled.
+   */
+  shadowedBy?: ShadowedBy;
 }
 
 export interface AgentEntry extends ConfigSource {
   name: string;
   description?: string;
+  /** Frontmatter `tools` (comma-separated string or YAML list). */
+  tools?: string[];
+  /** Frontmatter `disallowedTools`. */
+  disallowedTools?: string[];
+  /** `sonnet`, `opus`, `haiku`, `fable`, a full model id, or `inherit`. */
+  model?: string;
+  /** `default`, `acceptEdits`, `auto`, `dontAsk`, `bypassPermissions`, `plan`, `manual`. */
+  permissionMode?: string;
+  maxTurns?: number;
+  /** Skills preloaded into the subagent at startup. */
+  skills?: string[];
+  /** MCP servers exposed to the subagent. */
+  mcpServers?: string[];
+  /** Persistent memory scope: `user`, `project`, or `local`. */
+  memory?: string;
+  background?: boolean;
+  /** `low`, `medium`, `high`, `xhigh`, `max`. */
+  effort?: string;
+  /** e.g. `worktree`. */
+  isolation?: string;
+  color?: string;
+  /**
+   * Set when a higher-precedence subagent of the same name wins. Docs:
+   * `.claude/agents/` (project) outranks `~/.claude/agents/` (user).
+   */
+  shadowedBy?: ShadowedBy;
 }
+
+/**
+ * Whether Claude Code would actually expose a `.mcp.json` server.
+ *
+ * - `enabled`: approved, via `enableAllProjectMcpServers` or
+ *   `enabledMcpjsonServers` (or it comes from user config, always enabled).
+ * - `disabled`: listed in `disabledMcpjsonServers` in some layer.
+ * - `unapproved`: nothing approved it, so the CLI would prompt on first run.
+ */
+export type McpServerState = "enabled" | "disabled" | "unapproved";
 
 export interface McpServerEntry extends ConfigSource {
   name: string;
   transport: "stdio" | "http" | "sse" | "unknown";
   /** Command (stdio) or URL (http/sse). */
   target?: string;
+  /** The declared `type` field, when the entry has one. */
+  type?: "stdio" | "http" | "sse";
+  /** Environment overrides declared for a stdio server. */
+  env?: Record<string, string>;
+  /** Headers declared for an http/sse server. */
+  headers?: Record<string, string>;
+  state: McpServerState;
+  /** Why `state` is what it is, naming the settings file and key that decided. */
+  reason: string;
+  /** Absolute path of the settings file that decided `state`, when one did. */
+  stateSource?: string;
+  /** The settings key that decided `state`, when one did. */
+  stateKey?: string;
 }
 
 /** Effective settings merged across all layers, with provenance kept. */

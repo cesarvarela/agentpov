@@ -4,6 +4,7 @@ import type {
   MemoryEntry,
   PermissionRule,
   ResolvedContext,
+  SkillEntry,
 } from "@agentview/core";
 
 import type { FolderMemorySplit } from "../lib/derive";
@@ -11,22 +12,29 @@ import {
   instructionEntries,
   layerLabel,
   memoryEntries,
+  overridingDecisionFor,
   ruleTargetsFolder,
   splitFolderMemory,
 } from "../lib/derive";
-import { basename, dirname, displayPath, projectPath } from "../lib/paths";
+import { basename, dirname, displayPath } from "../lib/paths";
 import type { SourceTarget } from "../hooks/useSource";
 import {
+  AgentRow,
   Diagnostics,
   EmptyRow,
   LoadingGlyph,
   LoadingLegend,
+  McpServerRow,
   Panel,
   PermissionRow,
   RowButton,
   SectionDivider,
   SETTINGS_LAYER_ORDER,
+  SKILL_GROUP_THRESHOLD,
+  SKILL_SOURCE_LABEL,
   InstructionRow,
+  SkillRow,
+  groupSkillsBySource,
   ruleSourceMatches,
 } from "./ContextPanels";
 import {
@@ -109,15 +117,50 @@ function InstructionRows({
   );
 }
 
+/** Skill rows, each wired to open its SKILL.md in the source pane. */
+function SkillRows({
+  skills,
+  folder,
+  homeDir,
+  activeSourceKey,
+  onOpenSource,
+}: RowListProps & { skills: SkillEntry[] }) {
+  return (
+    <>
+      {skills.map((skill) => {
+        const key = `skill:${skill.path}`;
+        return (
+          <SkillRow
+            key={key}
+            skill={skill}
+            folder={folder}
+            homeDir={homeDir}
+            active={activeSourceKey === key}
+            onOpen={() =>
+              onOpenSource({ key, path: skill.path, layer: skill.layer })
+            }
+          />
+        );
+      })}
+    </>
+  );
+}
+
 /** Permission rows, each wired to open its settings file in the source pane. */
 function PermissionRows({
   rules,
+  allRules,
   keyPrefix,
   folder,
   homeDir,
   activeSourceKey,
   onOpenSource,
-}: RowListProps & { rules: PermissionRule[]; keyPrefix: string }) {
+}: RowListProps & {
+  rules: PermissionRule[];
+  /** Every rule in the context, so an overridden row can name what beat it. */
+  allRules: PermissionRule[];
+  keyPrefix: string;
+}) {
   return (
     <>
       {rules.map((rule, index) => {
@@ -127,6 +170,7 @@ function PermissionRows({
             key={key}
             rule={rule}
             targetKind="directory"
+            strongerDecision={overridingDecisionFor(allRules, rule)}
             folder={folder}
             homeDir={homeDir}
             active={activeSourceKey === key}
@@ -180,9 +224,8 @@ export function FolderContextView({
   // in their own panel.
   const instructions = context ? instructionEntries(context) : [];
   const memoryFiles = context ? memoryEntries(context) : [];
-  const matching = (context?.permissions ?? []).filter(
-    (rule) => rule.matchesFile,
-  );
+  const allRules = context?.permissions ?? [];
+  const matching = allRules.filter((rule) => rule.matchesFile);
 
   // Root sees one undivided list per panel; a subfolder leads with what it adds
   // on top of the root and shows the rest as inherited.
@@ -201,6 +244,34 @@ export function FolderContextView({
   const skills = context?.skills ?? [];
   const agents = context?.agents ?? [];
   const servers = context?.mcpServers ?? [];
+  const skillGroups = groupSkillsBySource(skills);
+
+  // Panel notes lead with the total, then what is not actually in play.
+  const shadowedSkills = skills.filter((skill) => skill.shadowedBy).length;
+  const skillNote = [
+    count(skills.length, "skill"),
+    shadowedSkills > 0 ? `${shadowedSkills} shadowed` : null,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(" · ");
+  const shadowedAgents = agents.filter((agent) => agent.shadowedBy).length;
+  const agentNote = [
+    count(agents.length, "subagent"),
+    shadowedAgents > 0 ? `${shadowedAgents} shadowed` : null,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(" · ");
+  const serverNote = [
+    count(servers.length, "server"),
+    servers.some((server) => server.state === "disabled")
+      ? `${servers.filter((server) => server.state === "disabled").length} disabled`
+      : null,
+    servers.some((server) => server.state === "unapproved")
+      ? `${servers.filter((server) => server.state === "unapproved").length} unapproved`
+      : null,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(" · ");
 
   return (
     <ScrollArea className="flex flex-1 flex-col gap-3.5 px-5 py-4">
@@ -337,6 +408,7 @@ export function FolderContextView({
                   <SectionDivider label="this folder" />
                   <PermissionRows
                     rules={folderRules}
+                    allRules={allRules}
                     keyPrefix="folder-permission"
                     {...rowProps}
                   />
@@ -351,6 +423,7 @@ export function FolderContextView({
                   <SectionDivider label={layerLabel(group.layer).toLowerCase()} />
                   <PermissionRows
                     rules={group.rules}
+                    allRules={allRules}
                     keyPrefix="permission"
                     {...rowProps}
                   />
@@ -411,50 +484,30 @@ export function FolderContextView({
         <Panel
           icon={<PlayIcon className="text-om-muted" />}
           title="Skills"
-          note={isRoot
-            ? count(skills.length, "skill")
-            : projectWide(count(skills.length, "skill"))}
+          note={isRoot ? skillNote : projectWide(skillNote)}
         >
           {skills.length === 0 ? (
             <EmptyRow text="No skills are available here." />
+          ) : skills.length > SKILL_GROUP_THRESHOLD ? (
+            // Plugins alone can bring dozens; grouped by where they come from
+            // the list stays readable and precedence reads top to bottom.
+            skillGroups.map((group) => (
+              <div key={group.source} className="flex flex-col">
+                <SectionDivider
+                  label={`${SKILL_SOURCE_LABEL[group.source]} · ${count(group.skills.length, "skill")}`}
+                />
+                <SkillRows skills={group.skills} {...rowProps} />
+              </div>
+            ))
           ) : (
-            skills.map((skill) => {
-              const key = `skill:${skill.path}`;
-              return (
-                <RowButton
-                  key={key}
-                  active={activeSourceKey === key}
-                  height="h-8"
-                  title={skill.path}
-                  onClick={() =>
-                    onOpenSource({
-                      key,
-                      path: skill.path,
-                      layer: skill.layer,
-                    })
-                  }
-                >
-                  <Badge className="w-[66px] shrink-0 justify-center">
-                    {layerLabel(skill.layer)}
-                  </Badge>
-                  <span className="w-[150px] shrink-0 truncate font-mono text-xs">
-                    {skill.name}
-                  </span>
-                  <span className="text-om-muted min-w-0 flex-1 truncate text-[11px]">
-                    {skill.description ?? projectPath(skill.path, folder, homeDir)}
-                  </span>
-                </RowButton>
-              );
-            })
+            <SkillRows skills={skills} {...rowProps} />
           )}
         </Panel>
 
         <Panel
           icon={<LogoIcon className="text-om-muted" />}
           title="Subagents"
-          note={isRoot
-            ? count(agents.length, "subagent")
-            : projectWide(count(agents.length, "subagent"))}
+          note={isRoot ? agentNote : projectWide(agentNote)}
         >
           {agents.length === 0 ? (
             <EmptyRow text="No subagents are defined." />
@@ -462,29 +515,20 @@ export function FolderContextView({
             agents.map((agent) => {
               const key = `agent:${agent.path}`;
               return (
-                <RowButton
+                <AgentRow
                   key={key}
+                  agent={agent}
+                  folder={folder}
+                  homeDir={homeDir}
                   active={activeSourceKey === key}
-                  height="h-8"
-                  title={agent.path}
-                  onClick={() =>
+                  onOpen={() =>
                     onOpenSource({
                       key,
                       path: agent.path,
                       layer: agent.layer,
                     })
                   }
-                >
-                  <Badge className="w-[66px] shrink-0 justify-center">
-                    {layerLabel(agent.layer)}
-                  </Badge>
-                  <span className="w-[150px] shrink-0 truncate font-mono text-xs">
-                    {agent.name}
-                  </span>
-                  <span className="text-om-muted min-w-0 flex-1 truncate text-[11px]">
-                    {agent.description ?? projectPath(agent.path, folder, homeDir)}
-                  </span>
-                </RowButton>
+                />
               );
             })
           )}
@@ -493,9 +537,7 @@ export function FolderContextView({
         <Panel
           icon={<ExternalLinkIcon className="text-om-muted" />}
           title="MCP servers"
-          note={isRoot
-            ? count(servers.length, "server")
-            : projectWide(count(servers.length, "server"))}
+          note={isRoot ? serverNote : projectWide(serverNote)}
         >
           {servers.length === 0 ? (
             <EmptyRow text="No MCP servers are configured." />
@@ -503,12 +545,13 @@ export function FolderContextView({
             servers.map((server) => {
               const key = `mcp:${server.path}:${server.name}`;
               return (
-                <RowButton
+                <McpServerRow
                   key={key}
+                  server={server}
+                  folder={folder}
+                  homeDir={homeDir}
                   active={activeSourceKey === key}
-                  height="h-8"
-                  title={server.path}
-                  onClick={() =>
+                  onOpen={() =>
                     onOpenSource({
                       key,
                       path: server.path,
@@ -516,23 +559,7 @@ export function FolderContextView({
                       matches: [`"${server.name}"`],
                     })
                   }
-                >
-                  <Badge className="w-[66px] shrink-0 justify-center">
-                    {layerLabel(server.layer)}
-                  </Badge>
-                  <span className="w-[150px] shrink-0 truncate font-mono text-xs">
-                    {server.name}
-                  </span>
-                  <Badge variant="teal" className="w-[52px] shrink-0 justify-center">
-                    {server.transport}
-                  </Badge>
-                  <span
-                    className="text-om-muted min-w-0 flex-1 truncate font-mono text-[11px]"
-                    title={server.target}
-                  >
-                    {server.target ?? projectPath(server.path, folder, homeDir)}
-                  </span>
-                </RowButton>
+                />
               );
             })
           )}

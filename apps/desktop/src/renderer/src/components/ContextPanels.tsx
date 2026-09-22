@@ -1,10 +1,15 @@
 import type { ReactNode } from "react";
 import { Badge } from "@agentview/ui";
 import type {
+  AgentEntry,
   ConfigLayer,
+  McpServerEntry,
   MemoryEntry,
   MemoryLoading,
+  PermissionDecision,
   PermissionRule,
+  SkillEntry,
+  SkillSource,
   TargetKind,
 } from "@agentview/core";
 
@@ -189,6 +194,7 @@ export function EmptyRow({ text }: { text: string }) {
 export function RowButton({
   active,
   bg,
+  dim = false,
   height,
   padding = "px-3",
   title,
@@ -198,6 +204,11 @@ export function RowButton({
   active: boolean;
   /** Background class for the resting state, if the row has one. */
   bg?: string;
+  /**
+   * Faded row: the entry is on disk but out of play — a disabled MCP server, a
+   * shadowed skill or subagent. Same treatment an overridden rule gets.
+   */
+  dim?: boolean;
   height: string;
   padding?: string;
   title?: string;
@@ -210,6 +221,8 @@ export function RowButton({
       onClick={onClick}
       title={title}
       className={`border-om-border/60 flex w-full shrink-0 cursor-pointer items-center gap-2.5 border-t text-left transition-colors first:border-t-0 ${height} ${padding} ${
+        dim ? "opacity-50" : ""
+      } ${
         active
           ? "bg-om-amber-bg shadow-[inset_2px_0_0_var(--om-amber)]"
           : `${bg ?? ""} hover:bg-om-raised`
@@ -220,7 +233,7 @@ export function RowButton({
   );
 }
 
-/** One CLAUDE.md, `@import` or memory file row. */
+/** One CLAUDE.md, `.claude/rules` file, `@import` or memory file row. */
 export function InstructionRow({
   entry,
   folder,
@@ -267,6 +280,41 @@ export function InstructionRow({
     );
   }
 
+  const path = isDirectory
+    ? (relativeTo(entry.path, folder) ?? entry.path)
+    : projectPath(entry.path, folder, homeDir);
+
+  // A `.claude/rules` file with `paths:` only loads when Claude reads a file it
+  // covers. The glyph already says "on read"; the second line says what for.
+  if (entry.kind === "rule") {
+    const globs = entry.appliesToGlobs;
+    return (
+      <RowButton
+        active={active}
+        height={globs ? "min-h-[42px] py-1.5" : "h-[30px]"}
+        title={entry.path}
+        onClick={onOpen}
+      >
+        <Badge className="w-[66px] shrink-0 justify-center">
+          {layerLabel(entry.layer)}
+        </Badge>
+        <LoadingGlyph loading={entry.loading} reason={entry.reason} />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="text-om-text truncate font-mono text-xs">{path}</span>
+          {globs ? (
+            <span
+              className="text-om-muted truncate font-mono text-[11px]"
+              title={globs.join(", ")}
+            >
+              {globs.join(", ")}
+            </span>
+          ) : null}
+        </span>
+        <span className="text-om-muted shrink-0 text-[11px]">{size}</span>
+      </RowButton>
+    );
+  }
+
   return (
     <RowButton
       active={active}
@@ -279,28 +327,40 @@ export function InstructionRow({
       </Badge>
       <LoadingGlyph loading={entry.loading} reason={entry.reason} />
       <span className="text-om-text min-w-0 flex-1 truncate font-mono text-xs">
-        {isDirectory
-          ? (relativeTo(entry.path, folder) ?? entry.path)
-          : projectPath(entry.path, folder, homeDir)}
+        {path}
       </span>
       <span className="text-om-muted shrink-0 text-[11px]">{size}</span>
     </RowButton>
   );
 }
 
-/** Right-hand annotation of a permission row. */
+/**
+ * Right-hand annotation of a permission row.
+ *
+ * `strongerDecision` is the decision that beat an overridden rule: Claude Code
+ * merges every layer into one set and evaluates it deny → ask → allow, so what
+ * overrides a rule is a stronger decision, not a higher layer. The layer only
+ * says which file to look in.
+ */
 export function ruleNote(
   rule: PermissionRule,
   targetKind: TargetKind,
+  strongerDecision?: PermissionDecision,
 ): { text: string; className: string } {
-  if (rule.layer === "managed") {
-    return { text: "cannot be overridden", className: "text-om-muted" };
-  }
   if (rule.overridden) {
+    const where = rule.overriddenBy
+      ? `${layerLabel(rule.overriddenBy).toLowerCase()} settings`
+      : "another settings file";
     return {
-      text: `overridden by ${rule.overriddenBy ? layerLabel(rule.overriddenBy) : "a higher layer"}`,
+      text: `overridden by ${strongerDecision ?? "a stronger rule"} in ${where}`,
       className: "text-om-amber",
     };
+  }
+  // Only a managed deny is truly untouchable: deny is the strongest decision
+  // and no layer can edit managed settings. A managed allow or ask still loses
+  // to a stronger decision anywhere, so it gets the ordinary note.
+  if (rule.layer === "managed" && rule.decision === "deny") {
+    return { text: "cannot be overridden", className: "text-om-muted" };
   }
   if (rule.matchesFile) {
     return {
@@ -315,6 +375,7 @@ export function ruleNote(
 export function PermissionRow({
   rule,
   targetKind,
+  strongerDecision,
   folder,
   homeDir,
   active,
@@ -322,12 +383,14 @@ export function PermissionRow({
 }: {
   rule: PermissionRule;
   targetKind: TargetKind;
+  /** Decision that overrode this rule, when it was overridden. */
+  strongerDecision?: PermissionDecision;
   folder: string;
   homeDir: string;
   active: boolean;
   onOpen: () => void;
 }) {
-  const note = ruleNote(rule, targetKind);
+  const note = ruleNote(rule, targetKind, strongerDecision);
 
   return (
     <RowButton
@@ -383,6 +446,231 @@ export function Diagnostics({ diagnostics }: { diagnostics: string[] }) {
         </div>
       ))}
     </div>
+  );
+}
+
+/**
+ * Where a skill comes from, in the square layer-badge family: it is structure,
+ * like USER or PROJECT, so it stays colourless.
+ */
+export const SKILL_SOURCE_LABEL = {
+  personal: "personal",
+  synced: "synced",
+  project: "project",
+  nested: "nested",
+  plugin: "plugin",
+} as const satisfies Record<SkillSource, string>;
+
+/** Sources in the order they are listed, highest precedence first. */
+export const SKILL_SOURCE_ORDER: SkillSource[] = [
+  "personal",
+  "synced",
+  "project",
+  "nested",
+  "plugin",
+];
+
+/** Above this many skills the panel groups them by source. */
+export const SKILL_GROUP_THRESHOLD = 12;
+
+export function groupSkillsBySource(
+  skills: SkillEntry[],
+): { source: SkillSource; skills: SkillEntry[] }[] {
+  return SKILL_SOURCE_ORDER.map((source) => ({
+    source,
+    skills: skills.filter((skill) => skill.source === source),
+  })).filter((group) => group.skills.length > 0);
+}
+
+/**
+ * Why a skill or subagent is on disk but never used: a higher-precedence file
+ * of the same name won. Same wording for both, and the same faded, struck-
+ * through treatment an overridden permission rule gets.
+ */
+function shadowTitle(
+  kind: "skill" | "subagent",
+  shadowedBy: ConfigLayer,
+  path: string,
+): string {
+  return `shadowed by ${shadowedBy} ${kind} at ${path}`;
+}
+
+/** `PROJECT  deploy  Ship the app to staging`, struck through when shadowed. */
+export function SkillRow({
+  skill,
+  folder,
+  homeDir,
+  active,
+  onOpen,
+}: {
+  skill: SkillEntry;
+  folder: string;
+  homeDir: string;
+  active: boolean;
+  onOpen: () => void;
+}) {
+  const shadowed = skill.shadowedBy;
+  return (
+    <RowButton
+      active={active}
+      dim={shadowed !== undefined}
+      height="h-8"
+      title={
+        shadowed
+          ? shadowTitle("skill", shadowed.layer, shadowed.path)
+          : skill.path
+      }
+      onClick={onOpen}
+    >
+      <Badge className="w-[66px] shrink-0 justify-center">
+        {SKILL_SOURCE_LABEL[skill.source]}
+      </Badge>
+      <span
+        className={`w-[170px] shrink-0 truncate font-mono text-xs ${
+          shadowed ? "text-om-muted line-through" : ""
+        }`}
+        title={skill.name}
+      >
+        {skill.name}
+      </span>
+      <span className="text-om-muted min-w-0 flex-1 truncate text-[11px]">
+        {skill.description ?? projectPath(skill.path, folder, homeDir)}
+      </span>
+    </RowButton>
+  );
+}
+
+/** `PROJECT  reviewer  sonnet · 3 tools`, struck through when shadowed. */
+export function AgentRow({
+  agent,
+  folder,
+  homeDir,
+  active,
+  onOpen,
+}: {
+  agent: AgentEntry;
+  folder: string;
+  homeDir: string;
+  active: boolean;
+  onOpen: () => void;
+}) {
+  const shadowed = agent.shadowedBy;
+  // Model and tool count only; the source pane shows the whole frontmatter.
+  const facts = [
+    agent.model,
+    agent.tools
+      ? `${agent.tools.length} tool${agent.tools.length === 1 ? "" : "s"}`
+      : undefined,
+  ].filter((fact): fact is string => fact !== undefined);
+
+  return (
+    <RowButton
+      active={active}
+      dim={shadowed !== undefined}
+      height={facts.length > 0 ? "min-h-[42px] py-1.5" : "h-8"}
+      title={
+        shadowed
+          ? shadowTitle("subagent", shadowed.layer, shadowed.path)
+          : agent.path
+      }
+      onClick={onOpen}
+    >
+      <Badge className="w-[66px] shrink-0 justify-center">
+        {layerLabel(agent.layer)}
+      </Badge>
+      <span
+        className={`w-[150px] shrink-0 truncate font-mono text-xs ${
+          shadowed ? "text-om-muted line-through" : ""
+        }`}
+        title={agent.name}
+      >
+        {agent.name}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="text-om-muted truncate text-[11px]">
+          {agent.description ?? projectPath(agent.path, folder, homeDir)}
+        </span>
+        {facts.length > 0 ? (
+          <span className="text-om-muted truncate font-mono text-[11px]">
+            {facts.join(" · ")}
+          </span>
+        ) : null}
+      </span>
+    </RowButton>
+  );
+}
+
+/**
+ * `PROJECT  fixture-http  http  https://…  env FIXTURE  DISABLED`.
+ *
+ * State is drawn with the badge families that already exist: a deny pill for a
+ * server Claude Code would not load, a plain layer-style badge for one it would
+ * have to ask about first. MCP servers have no colour of their own.
+ *
+ * Never renders an env value or a header value — they hold secrets. Only the
+ * key names show.
+ */
+export function McpServerRow({
+  server,
+  folder,
+  homeDir,
+  active,
+  onOpen,
+}: {
+  server: McpServerEntry;
+  folder: string;
+  homeDir: string;
+  active: boolean;
+  onOpen: () => void;
+}) {
+  const transport = server.type ?? server.transport;
+  const keys = [
+    ...Object.keys(server.env ?? {}).map((key) => `env ${key}`),
+    ...Object.keys(server.headers ?? {}).map((key) => `header ${key}`),
+  ];
+
+  return (
+    <RowButton
+      active={active}
+      dim={server.state === "disabled"}
+      height="h-8"
+      title={server.reason}
+      onClick={onOpen}
+    >
+      <Badge className="w-[66px] shrink-0 justify-center">
+        {layerLabel(server.layer)}
+      </Badge>
+      <span className="w-[150px] shrink-0 truncate font-mono text-xs">
+        {server.name}
+      </span>
+      {transport === "unknown" ? null : (
+        <span className="text-om-muted w-[34px] shrink-0 text-[11px]">
+          {transport}
+        </span>
+      )}
+      <span
+        className="text-om-muted min-w-0 flex-1 truncate font-mono text-[11px]"
+        title={server.target}
+      >
+        {server.target ?? projectPath(server.path, folder, homeDir)}
+      </span>
+      {keys.length > 0 ? (
+        <span
+          className="text-om-muted shrink-0 truncate font-mono text-[11px]"
+          title={keys.join(", ")}
+        >
+          {keys.join(", ")}
+        </span>
+      ) : null}
+      {server.state === "disabled" ? (
+        <Badge variant="deny" className="shrink-0">
+          disabled
+        </Badge>
+      ) : null}
+      {server.state === "unapproved" ? (
+        <Badge className="shrink-0">needs approval</Badge>
+      ) : null}
+    </RowButton>
   );
 }
 

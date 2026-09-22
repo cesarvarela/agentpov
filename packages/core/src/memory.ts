@@ -7,24 +7,36 @@ import {
   userClaudeDir,
   type ResolveRun,
 } from "./context.js";
-import { descendingChain, toAbsolute } from "./paths.js";
+import { frontmatterList, parseFrontmatterFields } from "./frontmatter.js";
+import { globCoversDirectory, matchGlob } from "./glob.js";
+import { descendingChain, toAbsolute, toPosix } from "./paths.js";
 import {
   type ConfigLayer,
   type MemoryEntry,
   type MemoryLoading,
 } from "./types.js";
 
-const MAX_IMPORT_DEPTH = 5;
+/** Claude Code follows `@imports` four hops deep. */
+const MAX_IMPORT_DEPTH = 4;
 
 export const REASON_ALWAYS = "always loaded";
 export const REASON_WHEN_READ = "loaded when this file is read";
 export const REASON_WHEN_READ_IN_FOLDER = "loaded when files in this folder are read";
 export const REASON_RECALLED = "recalled on demand";
+/** Prefix of a `paths:`-scoped rule's reason; the globs follow. */
+export const REASON_WHEN_READ_MATCHING = "loaded when Claude reads a file matching";
+
+/** `loaded when Claude reads a file matching src/**\/*.ts, docs/**` */
+export function reasonForRuleGlobs(globs: string[]): string {
+  return `${REASON_WHEN_READ_MATCHING} ${globs.join(", ")}`;
+}
 
 interface Candidate {
   path: string;
   layer: ConfigLayer;
   scopedToFile: boolean;
+  /** For a `paths:`-scoped rule: the globs it declares, as written. */
+  globs?: string[];
 }
 
 /** One `@path` reference found in a CLAUDE.md. */
@@ -67,12 +79,11 @@ function trimTrailingPunctuation(token: string): string {
 
 function looksLikePath(token: string): boolean {
   if (token.length === 0) return false;
-  if (token.startsWith("~/") || token.startsWith("./") || token.startsWith("../")) {
-    return true;
-  }
-  if (token.startsWith("/")) return true;
-  if (token.includes("/")) return true;
-  return /\.(?:md|markdown|txt)$/i.test(token);
+  // Claude Code resolves slash-free, extension-free imports too (`@README`),
+  // so anything after a standalone `@` counts. An email never reaches here:
+  // `findImports` only matches an `@` that starts a line or follows whitespace.
+  if (token.includes("@")) return false;
+  return true;
 }
 
 function resolveImport(run: ResolveRun, fromDir: string, raw: string): string {
@@ -100,6 +111,7 @@ async function readMemoryFile(
     loading,
     scopedToFile: candidate.scopedToFile,
   };
+  if (candidate.globs) entry.appliesToGlobs = candidate.globs;
   if (extra) {
     entry.importedBy = extra.importedBy;
     entry.importedAtLine = extra.importedAtLine;
@@ -187,7 +199,125 @@ async function collectMemoryDirectory(run: ResolveRun): Promise<MemoryEntry[]> {
   return out;
 }
 
-/** Every CLAUDE.md, import and memory file that applies, lowest precedence first. */
+/**
+ * Expands `{a,b}` alternatives, innermost group first: `src/{a,b}/*.ts` →
+ * `src/a/*.ts`, `src/b/*.ts`. A pattern without braces comes back unchanged.
+ */
+export function expandBraces(pattern: string): string[] {
+  const open = pattern.indexOf("{");
+  if (open < 0) return [pattern];
+
+  let depth = 0;
+  let close = -1;
+  for (let i = open; i < pattern.length; i += 1) {
+    const char = pattern[i]!;
+    if (char === "{") depth += 1;
+    else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        close = i;
+        break;
+      }
+    }
+  }
+  if (close < 0) return [pattern]; // unbalanced; treat literally
+
+  const before = pattern.slice(0, open);
+  const after = pattern.slice(close + 1);
+  const alternatives: string[] = [];
+  let current = "";
+  let nested = 0;
+  for (const char of pattern.slice(open + 1, close)) {
+    if (char === "{") nested += 1;
+    else if (char === "}") nested -= 1;
+    if (char === "," && nested === 0) {
+      alternatives.push(current);
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  alternatives.push(current);
+
+  const out: string[] = [];
+  for (const alternative of alternatives) {
+    out.push(...expandBraces(`${before}${alternative}${after}`));
+  }
+  return out;
+}
+
+/** Every `.md` file under `root`, recursively, in stable path order. */
+async function listRuleFiles(run: ResolveRun, root: string): Promise<string[]> {
+  const out: string[] = [];
+  const walk = async (dir: string): Promise<void> => {
+    const entries = [...(await listDir(run, dir))].sort((a, b) =>
+      a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
+    );
+    for (const entry of entries) {
+      const path = run.p.join(dir, entry.name);
+      if (entry.isDirectory) await walk(path);
+      else if (entry.name.toLowerCase().endsWith(".md")) out.push(path);
+    }
+  };
+  await walk(root);
+  return out.sort();
+}
+
+/** Does a rule's `paths:` glob reach the resolved target? */
+function ruleGlobHitsTarget(run: ResolveRun, glob: string): boolean {
+  const relativeTarget = toPosix(run.p.relative(run.folder, run.file));
+  for (const expanded of expandBraces(glob)) {
+    const pattern = toPosix(expanded.replace(/^\.\//, "").replace(/^\/+/, ""));
+    if (pattern.length === 0) continue;
+    if (run.targetKind === "directory") {
+      if (globCoversDirectory(pattern, relativeTarget)) return true;
+    } else if (matchGlob(pattern, relativeTarget)) return true;
+  }
+  return false;
+}
+
+/**
+ * `.claude/rules/**\/*.md`. A rule without `paths:` loads at launch, like
+ * `.claude/CLAUDE.md`; one with `paths:` loads only when Claude reads a
+ * matching file, so it is listed only when the target is covered.
+ */
+async function collectRules(
+  run: ResolveRun,
+  root: string,
+  layer: ConfigLayer,
+  seen: Set<string>,
+): Promise<MemoryEntry[]> {
+  const out: MemoryEntry[] = [];
+  for (const path of await listRuleFiles(run, root)) {
+    if (seen.has(path)) continue;
+    const content = await readText(run, path);
+    if (content === null) continue;
+    const globs = frontmatterList(parseFrontmatterFields(content), "paths");
+
+    let candidate: Candidate;
+    let reason: string;
+    let loading: MemoryLoading;
+    if (globs.length === 0) {
+      candidate = { path, layer, scopedToFile: false };
+      reason = REASON_ALWAYS;
+      loading = "always";
+    } else {
+      if (!globs.some((glob) => ruleGlobHitsTarget(run, glob))) continue;
+      candidate = { path, layer, scopedToFile: true, globs };
+      reason = reasonForRuleGlobs(globs);
+      loading = "on-read";
+    }
+
+    seen.add(path);
+    const entry = await readMemoryFile(run, candidate, "rule", reason, loading);
+    if (!entry) continue;
+    out.push(entry);
+    out.push(...(await collectImports(run, entry, seen, 1)));
+  }
+  return out;
+}
+
+/** Every CLAUDE.md, rule, import and memory file that applies, lowest precedence first. */
 export async function collectMemory(run: ResolveRun): Promise<MemoryEntry[]> {
   const { p } = run;
   // A directory target owns its own CLAUDE.md, so the chain starts at the
@@ -236,8 +366,14 @@ export async function collectMemory(run: ResolveRun): Promise<MemoryEntry[]> {
   };
 
   await emit(candidates);
+  out.push(
+    ...(await collectRules(run, p.join(userClaudeDir(run), "rules"), "user", seen)),
+  );
   out.push(...(await collectMemoryDirectory(run)));
   await emit(projectCandidates);
+  out.push(
+    ...(await collectRules(run, p.join(projectClaudeDir(run), "rules"), "project", seen)),
+  );
   await emit(directoryCandidates);
 
   return out;
