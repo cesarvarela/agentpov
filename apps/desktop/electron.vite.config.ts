@@ -30,7 +30,11 @@ export default defineConfig({
       },
     },
     plugins: [react(), tailwindcss()],
-    server: { port: 4001, strictPort: true },
+    // AGENTVIEW_PORT lets a second checkout (a worktree) run beside the main one.
+    server: {
+      port: Number(process.env.AGENTVIEW_PORT ?? 4001),
+      strictPort: true,
+    },
     build: {
       rollupOptions: {
         input: { index: resolve(__dirname, "src/renderer/index.html") },

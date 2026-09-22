@@ -4,19 +4,32 @@ import { Badge } from "@agentview/ui";
 import type { SourceTarget } from "../hooks/useSource";
 import { layerLabel } from "../lib/derive";
 import { basename, displayPath, formatBytes } from "../lib/paths";
+import { VIEWERS, viewerKindFor } from "../viewers";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
   DocIcon,
   ExternalLinkIcon,
 } from "./Icons";
+import { SourceLines } from "./SourceLines";
 
 interface Loaded {
   path: string;
+  content: string;
   lines: string[];
   bytes: number;
   truncated: boolean;
 }
+
+/** Which body the pane shows: the rendered viewer or the raw numbered lines. */
+type ViewMode = "rendered" | "source";
+
+/**
+ * The last mode the user picked by hand, for this session. Deliberately not
+ * per file: switching files keeps whichever view the user asked for. Module
+ * scope rather than state because nothing needs to re-render when it changes.
+ */
+let lastPickedMode: ViewMode | null = null;
 
 /** 1-based line to highlight, or null when nothing matched. */
 function highlightLine(target: SourceTarget, lines: string[]): number | null {
@@ -37,8 +50,8 @@ interface SourcePaneProps {
   source: SourceTarget;
   folder: string;
   homeDir: string;
-  /** Opens the file that contains an `@import` reference, at that line. */
-  onOpenParent: (path: string, line: number) => void;
+  /** Opens another file in the pane: an `@import`, a hook script, a parent. */
+  onOpenPath: (path: string, line?: number) => void;
   canGoBack: boolean;
   canGoForward: boolean;
   onBack: () => void;
@@ -59,12 +72,44 @@ export function SourcePaneEmpty() {
   );
 }
 
+function ModeToggle({
+  mode,
+  onPick,
+}: {
+  mode: ViewMode;
+  onPick: (mode: ViewMode) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="View mode"
+      className="border-om-border flex h-[22px] shrink-0 items-center overflow-hidden rounded-md border"
+    >
+      {(["rendered", "source"] as const).map((value) => (
+        <button
+          key={value}
+          type="button"
+          onClick={() => onPick(value)}
+          aria-pressed={mode === value}
+          className={`h-full cursor-pointer px-2 text-[11px] capitalize transition-colors ${
+            mode === value
+              ? "bg-om-raised text-om-text"
+              : "text-om-muted hover:text-om-text"
+          }`}
+        >
+          {value}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** Read-only view of one config file, opened by clicking a row in a card. */
 export function SourcePane({
   source,
   folder,
   homeDir,
-  onOpenParent,
+  onOpenPath,
   canGoBack,
   canGoForward,
   onBack,
@@ -77,10 +122,32 @@ export function SourcePane({
 
   /** Guards against out-of-order responses when clicking rows quickly. */
   const requestId = useRef(0);
-  const highlightRef = useRef<HTMLDivElement | null>(null);
-  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const renderedRef = useRef<HTMLDivElement | null>(null);
 
   const { path } = source;
+  const kind = viewerKindFor(path);
+  const Viewer = kind === "text" ? null : VIEWERS[kind];
+
+  // A new target resets the hand-picked mode, so the rules below apply again.
+  const targetId = `${path}\n${source.line ?? ""}\n${source.key}`;
+  const [pickedFor, setPickedFor] = useState<{
+    target: string;
+    mode: ViewMode | null;
+  }>({ target: targetId, mode: null });
+  if (pickedFor.target !== targetId) {
+    setPickedFor({ target: targetId, mode: null });
+  }
+
+  const mode: ViewMode = !Viewer
+    ? "source"
+    : (pickedFor.mode ??
+      // An opener that named a line wants that line, so start on the lines.
+      (source.line !== undefined ? "source" : (lastPickedMode ?? "rendered")));
+
+  const pickMode = (next: ViewMode) => {
+    lastPickedMode = next;
+    setPickedFor({ target: targetId, mode: next });
+  };
 
   useEffect(() => {
     if (!api) {
@@ -97,6 +164,7 @@ export function SourcePane({
         if (id !== requestId.current) return;
         setLoaded({
           path: file.path,
+          content: file.content,
           lines: file.content === "" ? [] : file.content.split("\n"),
           bytes: file.bytes,
           truncated: file.truncated,
@@ -116,12 +184,8 @@ export function SourcePane({
   const line = fresh ? highlightLine(source, fresh.lines) : null;
 
   useEffect(() => {
-    if (line === null) {
-      bodyRef.current?.scrollTo({ top: 0 });
-      return;
-    }
-    highlightRef.current?.scrollIntoView({ block: "center" });
-  }, [line, path, fresh]);
+    renderedRef.current?.scrollTo({ top: 0 });
+  }, [path, mode, fresh]);
 
   const label = displayPath(path, folder, homeDir);
   const size = fresh ? formatBytes(fresh.bytes) : null;
@@ -164,6 +228,7 @@ export function SourcePane({
         {size ? (
           <span className="text-om-muted shrink-0 text-[11px]">{size}</span>
         ) : null}
+        {Viewer ? <ModeToggle mode={mode} onPick={pickMode} /> : null}
         <button
           type="button"
           onClick={() => void api?.openInEditor(path)}
@@ -181,7 +246,7 @@ export function SourcePane({
           <button
             type="button"
             onClick={() =>
-              onOpenParent(
+              onOpenPath(
                 source.importedAt?.parent ?? "",
                 source.importedAt?.line ?? 1,
               )
@@ -194,46 +259,37 @@ export function SourcePane({
         </div>
       ) : null}
 
-      <div ref={bodyRef} className="min-h-0 flex-1 overflow-auto">
-        {error ? (
+      {error ? (
+        <div className="min-h-0 flex-1 overflow-auto">
           <p className="text-om-muted px-3 py-3 text-xs">
             {isMissing(error) ? "File not found on disk." : error}
           </p>
-        ) : !fresh ? (
+        </div>
+      ) : !fresh ? (
+        <div className="min-h-0 flex-1 overflow-auto">
           <p className="text-om-muted px-3 py-3 text-xs">
             {loading ? "Loading…" : ""}
           </p>
-        ) : fresh.lines.length === 0 ? (
+        </div>
+      ) : fresh.lines.length === 0 ? (
+        <div className="min-h-0 flex-1 overflow-auto">
           <p className="text-om-muted px-3 py-3 text-xs">Empty file.</p>
-        ) : (
-          <div className="min-w-max py-1 font-mono text-xs leading-[18px]">
-            {fresh.lines.map((text, index) => {
-              const number = index + 1;
-              const active = number === line;
-              return (
-                <div
-                  key={number}
-                  ref={active ? highlightRef : null}
-                  className={`flex ${active ? "bg-om-amber/12" : ""}`}
-                >
-                  <span
-                    className={`sticky left-0 w-[46px] shrink-0 border-l-2 pr-2.5 text-right text-[11px] select-none ${
-                      active
-                        ? "border-om-amber text-om-amber bg-om-amber-bg"
-                        : "bg-om-panel text-om-muted border-transparent"
-                    }`}
-                  >
-                    {number}
-                  </span>
-                  <span className="text-om-text pr-4 whitespace-pre">
-                    {text === "" ? " " : text}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+        </div>
+      ) : mode === "rendered" && Viewer ? (
+        <div ref={renderedRef} className="min-h-0 flex-1 overflow-auto">
+          <Viewer
+            path={path}
+            content={fresh.content}
+            folder={folder}
+            homeDir={homeDir}
+            matches={source.matches}
+            line={source.line}
+            onOpenPath={onOpenPath}
+          />
+        </div>
+      ) : (
+        <SourceLines lines={fresh.lines} line={line} path={path} />
+      )}
 
       {fresh?.truncated ? (
         <p className="border-om-border text-om-amber shrink-0 border-t px-3 py-1.5 text-[11px]">
