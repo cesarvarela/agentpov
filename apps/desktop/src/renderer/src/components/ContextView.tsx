@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
 import { Badge, ScrollArea } from "@agentview/ui";
 import type {
+  ConfigLayer,
   MemoryEntry,
   PermissionDecision,
   PermissionRule,
   ResolvedContext,
+  SettingsEntry,
 } from "@agentview/core";
 
 import {
@@ -14,6 +16,7 @@ import {
   matchingDenyRules,
   memoryEntries,
   verdictFor,
+  winningRuleFor,
 } from "../lib/derive";
 import {
   basename,
@@ -27,7 +30,6 @@ import {
 import type { FileDetail } from "../hooks/useProject";
 import type { SourceTarget } from "../hooks/useSource";
 import {
-  CheckIcon,
   DocIcon,
   HookIcon,
   ImportIcon,
@@ -41,6 +43,33 @@ const DECISION_VARIANT = {
   ask: "ask",
   deny: "deny",
 } as const;
+
+/**
+ * Settings files are listed highest-precedence first. Kept as a local literal:
+ * a runtime import from `@agentview/core` would drag its Node file-system
+ * module into the browser bundle.
+ */
+const SETTINGS_LAYER_ORDER: ConfigLayer[] = [
+  "managed",
+  "directory",
+  "local",
+  "project",
+  "user",
+];
+
+function layerRank(layer: ConfigLayer): number {
+  const index = SETTINGS_LAYER_ORDER.indexOf(layer);
+  return index === -1 ? SETTINGS_LAYER_ORDER.length : index;
+}
+
+/** Muted label that splits a panel into sections. */
+function SectionDivider({ label }: { label: string }) {
+  return (
+    <div className="text-om-muted border-om-border/60 flex h-6 items-center border-t px-3 text-[10px] tracking-[0.04em] uppercase">
+      {label}
+    </div>
+  );
+}
 
 function Panel({
   icon,
@@ -112,56 +141,56 @@ function RowButton({
   );
 }
 
-function Chip({
-  tone,
-  icon,
-  children,
-}: {
-  tone: "neutral" | "teal" | "allow" | "ask" | "deny";
-  icon?: ReactNode;
-  children: ReactNode;
-}) {
-  const styles = {
-    neutral: "border-om-border bg-om-raised text-om-text",
-    teal: "border-[#2a4a48] bg-[#15292a] text-om-teal",
-    allow: "border-[#2c4a35] bg-[#1a2a20] text-om-allow",
-    ask: "border-[#4a3d22] bg-[#2a2418] text-om-amber",
-    deny: "border-[#4a2c2c] bg-[#2a1a1a] text-om-deny",
-  } as const;
-
-  return (
-    <div
-      className={`flex h-[26px] shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs ${styles[tone]}`}
-    >
-      {icon}
-      {children}
-    </div>
-  );
-}
-
-const DECISION_TONE = {
-  allow: "allow",
-  ask: "ask",
-  deny: "deny",
-} as const;
-
-/** `ALLOW  Edit(src/api/payments.ts)` — small caps decision plus the mono call. */
-function VerdictChip({
+/** One `DENY  Edit(foo.ts)  from <rule> · <layer> · <file>` line. */
+function VerdictRow({
   decision,
   call,
+  callTitle,
+  explanation,
+  active,
+  onOpen,
 }: {
   decision: PermissionDecision;
   call: string;
+  /** Full `Tool(path)` text for the tooltip when `call` is just the tool name. */
+  callTitle?: string;
+  explanation: string;
+  active: boolean;
+  /** Omitted when no rule backs the verdict, which makes the row inert. */
+  onOpen?: () => void;
 }) {
-  return (
-    <Chip tone={DECISION_TONE[decision]}>
-      <span className="text-[10px] tracking-[0.04em] uppercase">
-        {decision}
-      </span>
-      <span className="font-mono" title={call}>
+  const body = (
+    <>
+      <Badge
+        variant={DECISION_VARIANT[decision]}
+        className="w-[46px] shrink-0 justify-center"
+      >
+        {decision.toUpperCase()}
+      </Badge>
+      <span className="min-w-0 flex-1 truncate font-mono text-xs" title={callTitle ?? call}>
         {call}
       </span>
-    </Chip>
+      <span
+        className="text-om-muted shrink-0 text-[11px] whitespace-nowrap"
+        title={explanation}
+      >
+        {explanation}
+      </span>
+    </>
+  );
+
+  if (!onOpen) {
+    return (
+      <div className="border-om-border/60 flex h-[30px] w-full shrink-0 items-center gap-2.5 border-t px-3 first:border-t-0">
+        {body}
+      </div>
+    );
+  }
+
+  return (
+    <RowButton active={active} height="h-[30px]" title={explanation} onClick={onOpen}>
+      {body}
+    </RowButton>
   );
 }
 
@@ -309,10 +338,15 @@ export function ContextView({
   const memory = context ? memoryEntries(context) : [];
   const hooks = context ? editHooks(context) : [];
   const verdicts = context
-    ? ([
-        { decision: verdictFor(context, "Edit"), call: `Edit(${rel})` },
-        { decision: verdictFor(context, "Read"), call: `Read(${rel})` },
-      ] as const)
+    ? (["Edit", "Read", "Write"] as const).map((tool) => {
+        const rule = winningRuleFor(context, tool);
+        return {
+          tool,
+          decision: verdictFor(context, tool),
+          call: `${tool}(${rel})`,
+          rule,
+        };
+      })
     : [];
   // Deny rules that hit this file (or something it imports) and were not
   // overridden, minus any already shown as a resolved verdict above.
@@ -321,51 +355,50 @@ export function ContextView({
         (rule) => !verdicts.some((verdict) => verdict.call === rule.rule),
       )
     : [];
+  // Rules whose specifier hits this file, overridden ones included.
+  const matching = context
+    ? context.permissions.filter((rule) => rule.matchesFile)
+    : [];
+  const settingsFiles: SettingsEntry[] = context
+    ? [...context.settings].sort(
+        (a, b) => layerRank(a.layer) - layerRank(b.layer),
+      )
+    : [];
 
   return (
     <ScrollArea className="flex flex-1 flex-col gap-3.5 px-5 py-4">
       <div className="flex shrink-0 flex-col gap-2.5">
         <div className="flex flex-wrap items-baseline gap-2">
-          <span className="text-om-muted font-mono text-xs">{dirLabel}</span>
-          <span className="font-mono text-[17px] font-medium" title={rel}>
-            {name}
-          </span>
+          <button
+            type="button"
+            onClick={() => onOpenSource({ key: `file:${file}`, path: file })}
+            title="View file source"
+            className="group flex cursor-pointer flex-wrap items-baseline gap-2 text-left"
+          >
+            <span className="text-om-muted font-mono text-xs">{dirLabel}</span>
+            <span
+              className={`font-mono text-[17px] font-medium underline-offset-4 group-hover:underline ${
+                activeSourceKey === `file:${file}`
+                  ? "text-om-amber"
+                  : "group-hover:text-om-amber"
+              }`}
+              title={rel}
+            >
+              {name}
+            </span>
+          </button>
           <span className="text-om-muted text-[11px]">
             {languageOf(name)}
             {detail ? ` · ${detail.lines} lines` : ""}
             {detail?.truncated ? " (truncated)" : ""}
           </span>
         </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Chip tone="neutral" icon={<DocIcon className="text-om-muted" />}>
-            {instructionFiles} instruction file
-            {instructionFiles === 1 ? "" : "s"} in context
-          </Chip>
-          <Chip tone="teal" icon={<CheckIcon />}>
-            {hooks.length} hook{hooks.length === 1 ? "" : "s"} fire on Edit
-          </Chip>
-          {verdicts.map((verdict) => (
-            <VerdictChip
-              key={verdict.call}
-              decision={verdict.decision}
-              call={verdict.call}
-            />
-          ))}
-          {denyRules.map((rule, index) => (
-            <VerdictChip
-              key={`${rule.path}:${rule.rule}:${index}`}
-              decision="deny"
-              call={rule.rule}
-            />
-          ))}
-        </div>
       </div>
 
       <div className="flex flex-col gap-3.5">
         <Panel
           icon={<DocIcon className="text-om-muted" />}
-          title="Instructions in context"
+          title="Instructions"
           note={
             instructions.length > 0
               ? `${instructionFiles} files · ordered by precedence, lowest first`
@@ -456,70 +489,172 @@ export function ContextView({
 
         <Panel
           icon={<ShieldIcon className="text-om-muted" />}
-          title="Permissions affecting this file"
+          title="Permissions"
           note={
-            context && context.permissions.length > 0
-              ? `${context.permissions.length} rules · Managed > Local > Project > User`
+            context
+              ? `${matching.length} matching of ${context.permissions.length} rules`
               : undefined
           }
         >
-          {!context || context.permissions.length === 0 ? (
-            <EmptyRow text="No permission rules found." />
+          {!context ? (
+            <EmptyRow text={loading ? "Resolving…" : "No verdicts resolved."} />
           ) : (
-            context.permissions.map((rule, index) => {
-              const note = ruleNote(rule);
-              const key = `permission:${rule.path}:${rule.rule}:${index}`;
-              return (
-                <RowButton
-                  key={key}
-                  active={activeSourceKey === key}
-                  height="h-[30px]"
-                  title={rule.path}
-                  onClick={() =>
-                    onOpenSource({
-                      key,
-                      path: rule.path,
-                      layer: rule.layer,
-                      matches: [`"${rule.rule}"`, rule.rule],
-                    })
-                  }
-                >
-                  <Badge
-                    variant={DECISION_VARIANT[rule.decision]}
-                    className="w-[46px] shrink-0 justify-center"
-                  >
-                    {rule.decision}
-                  </Badge>
-                  <span
-                    className={`w-[200px] shrink-0 truncate font-mono text-xs ${
-                      rule.overridden
-                        ? "text-om-muted line-through"
-                        : "text-om-text"
-                    }`}
-                  >
-                    {rule.rule}
-                  </span>
-                  <Badge className="w-[66px] shrink-0 justify-center">
-                    {layerLabel(rule.layer)}
-                  </Badge>
-                  <span
-                    className="text-om-muted min-w-0 flex-1 truncate font-mono text-[11px]"
-                    title={rule.path}
-                  >
-                    {projectPath(rule.path, folder, homeDir)}
-                  </span>
-                  <span className={`shrink-0 text-[11px] ${note.className}`}>
-                    {note.text}
-                  </span>
-                </RowButton>
-              );
-            })
+            <>
+              {verdicts.map((verdict) => {
+                const rule = verdict.rule;
+                const key = `verdict:${verdict.tool}`;
+                return (
+                  <VerdictRow
+                    key={key}
+                    decision={verdict.decision}
+                    call={verdict.tool}
+                    callTitle={verdict.call}
+                    explanation={
+                      rule
+                        ? `from ${rule.rule} · ${layerLabel(rule.layer)} · ${projectPath(
+                            rule.path,
+                            folder,
+                            homeDir,
+                          )}`
+                        : "no rule matches · Claude Code will prompt"
+                    }
+                    active={activeSourceKey === key}
+                    onOpen={
+                      rule
+                        ? () =>
+                            onOpenSource({
+                              key,
+                              path: rule.path,
+                              layer: rule.layer,
+                              matches: [`"${rule.rule}"`, rule.rule],
+                            })
+                        : undefined
+                    }
+                  />
+                );
+              })}
+              {denyRules.map((rule, index) => {
+                const key = `verdict:deny:${rule.path}:${rule.rule}:${index}`;
+                return (
+                  <VerdictRow
+                    key={key}
+                    decision="deny"
+                    call={rule.rule}
+                    explanation={`from ${rule.rule} · ${layerLabel(rule.layer)} · ${projectPath(
+                      rule.path,
+                      folder,
+                      homeDir,
+                    )}`}
+                    active={activeSourceKey === key}
+                    onOpen={() =>
+                      onOpenSource({
+                        key,
+                        path: rule.path,
+                        layer: rule.layer,
+                        matches: [`"${rule.rule}"`, rule.rule],
+                      })
+                    }
+                  />
+                );
+              })}
+
+              <SectionDivider label="Matching rules" />
+              {matching.length === 0 ? (
+                <EmptyRow text="No rule matches this file." />
+              ) : (
+                matching.map((rule, index) => {
+                  const note = ruleNote(rule);
+                  const key = `permission:${rule.path}:${rule.rule}:${index}`;
+                  return (
+                    <RowButton
+                      key={key}
+                      active={activeSourceKey === key}
+                      height="h-[30px]"
+                      title={rule.path}
+                      onClick={() =>
+                        onOpenSource({
+                          key,
+                          path: rule.path,
+                          layer: rule.layer,
+                          matches: [`"${rule.rule}"`, rule.rule],
+                        })
+                      }
+                    >
+                      <Badge
+                        variant={DECISION_VARIANT[rule.decision]}
+                        className="w-[46px] shrink-0 justify-center"
+                      >
+                        {rule.decision}
+                      </Badge>
+                      <span
+                        className={`min-w-0 flex-1 truncate font-mono text-xs ${
+                          rule.overridden
+                            ? "text-om-muted line-through"
+                            : "text-om-text"
+                        }`}
+                      >
+                        {rule.rule}
+                      </span>
+                      <Badge className="w-[66px] shrink-0 justify-center">
+                        {layerLabel(rule.layer)}
+                      </Badge>
+                      <span
+                        className="text-om-muted shrink-0 truncate font-mono text-[11px]"
+                        title={rule.path}
+                      >
+                        {projectPath(rule.path, folder, homeDir)}
+                      </span>
+                      <span className={`shrink-0 text-[11px] ${note.className}`}>
+                        {note.text}
+                      </span>
+                    </RowButton>
+                  );
+                })
+              )}
+
+              <SectionDivider label="Settings files" />
+              {settingsFiles.length === 0 ? (
+                <EmptyRow text="No settings files found." />
+              ) : (
+                settingsFiles.map((entry) => {
+                  const key = `settings:${entry.path}`;
+                  const count = context.permissions.filter(
+                    (rule) => rule.path === entry.path,
+                  ).length;
+                  return (
+                    <RowButton
+                      key={key}
+                      active={activeSourceKey === key}
+                      height="h-[30px]"
+                      title={entry.path}
+                      onClick={() =>
+                        onOpenSource({
+                          key,
+                          path: entry.path,
+                          layer: entry.layer,
+                        })
+                      }
+                    >
+                      <Badge className="w-[66px] shrink-0 justify-center">
+                        {layerLabel(entry.layer)}
+                      </Badge>
+                      <span className="min-w-0 flex-1 truncate font-mono text-xs">
+                        {projectPath(entry.path, folder, homeDir)}
+                      </span>
+                      <span className="text-om-muted shrink-0 text-[11px]">
+                        {`${count} rule${count === 1 ? "" : "s"}`}
+                      </span>
+                    </RowButton>
+                  );
+                })
+              )}
+            </>
           )}
         </Panel>
 
         <Panel
           icon={<HookIcon className="text-om-teal" />}
-          title="Hooks that fire here"
+          title="Hooks"
           note="on Edit of this path"
         >
           {hooks.length === 0 ? (

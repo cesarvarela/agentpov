@@ -48,6 +48,22 @@ export function verdictFor(
 }
 
 /**
+ * The rule that decides the verdict for `tool` on the selected file: the first
+ * live deny if any, otherwise the first live allow. Undefined when nothing
+ * matches, which is the "ask" case.
+ */
+export function winningRuleFor(
+  ctx: ResolvedContext,
+  tool: string,
+): PermissionRule | undefined {
+  const rules = liveRulesFor(ctx, tool);
+  return (
+    rules.find((rule) => rule.decision === "deny") ??
+    rules.find((rule) => rule.decision === "allow")
+  );
+}
+
+/**
  * Every deny rule that still applies to the selected file: it matches the file
  * (or, once import tracking lands, something the file imports) and no higher
  * layer overrode it. These become the red chips in the header row.

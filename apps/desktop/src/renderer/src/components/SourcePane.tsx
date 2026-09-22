@@ -4,7 +4,12 @@ import { Badge } from "@agentview/ui";
 import type { SourceTarget } from "../hooks/useSource";
 import { layerLabel } from "../lib/derive";
 import { basename, displayPath, formatBytes } from "../lib/paths";
-import { DocIcon, ExternalLinkIcon } from "./Icons";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  DocIcon,
+  ExternalLinkIcon,
+} from "./Icons";
 
 interface Loaded {
   path: string;
@@ -34,7 +39,14 @@ interface SourcePaneProps {
   homeDir: string;
   /** Opens the file that contains an `@import` reference, at that line. */
   onOpenParent: (path: string, line: number) => void;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  onBack: () => void;
+  onForward: () => void;
 }
+
+const NAV_BUTTON =
+  "border-om-border bg-om-raised text-om-muted hover:text-om-text flex size-[22px] shrink-0 cursor-pointer items-center justify-center rounded-md border transition-colors disabled:opacity-40 disabled:cursor-default";
 
 /** Shown while the pane is open but no row has been clicked yet. */
 export function SourcePaneEmpty() {
@@ -53,6 +65,10 @@ export function SourcePane({
   folder,
   homeDir,
   onOpenParent,
+  canGoBack,
+  canGoForward,
+  onBack,
+  onForward,
 }: SourcePaneProps) {
   const api = window.agentview;
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -113,6 +129,28 @@ export function SourcePane({
   return (
     <aside className="border-om-border bg-om-panel flex h-full min-w-0 flex-col border-l">
       <header className="border-om-border flex h-8 shrink-0 items-center gap-2 border-b px-3">
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={onBack}
+            disabled={!canGoBack}
+            title="Back"
+            aria-label="Back"
+            className={NAV_BUTTON}
+          >
+            <ChevronLeftIcon className="size-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={onForward}
+            disabled={!canGoForward}
+            title="Forward"
+            aria-label="Forward"
+            className={NAV_BUTTON}
+          >
+            <ChevronRightIcon className="size-3.5" />
+          </button>
+        </div>
         <DocIcon className="text-om-muted shrink-0" />
         <span
           className="min-w-0 flex-1 truncate font-mono text-xs"

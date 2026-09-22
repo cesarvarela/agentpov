@@ -42,6 +42,10 @@ export default function App() {
     openSource,
     closeSource,
     toggle: toggleSource,
+    canGoBack,
+    canGoForward,
+    goBack,
+    goForward,
   } = useSource();
   const sourcePane = usePanePersistence("source", {
     defaultWidth: SOURCE_DEFAULT_WIDTH,
@@ -91,6 +95,22 @@ export default function App() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [closeSource, sourceOpen]);
+
+  /** Cmd/Ctrl+[ and Cmd/Ctrl+] walk the source pane's history. */
+  useEffect(() => {
+    if (!sourceOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (!(isMac ? event.metaKey : event.ctrlKey)) return;
+      if (event.key !== "[" && event.key !== "]") return;
+      if (typingInField()) return;
+      event.preventDefault();
+      if (event.key === "[") goBack();
+      else goForward();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [goBack, goForward, sourceOpen]);
 
   const { folder } = project;
 
@@ -178,6 +198,10 @@ export default function App() {
                         line,
                       })
                     }
+                    canGoBack={canGoBack}
+                    canGoForward={canGoForward}
+                    onBack={goBack}
+                    onForward={goForward}
                   />
                 ) : (
                   <SourcePaneEmpty />
