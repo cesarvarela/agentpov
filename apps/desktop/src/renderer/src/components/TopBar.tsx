@@ -2,9 +2,9 @@ import type { CSSProperties } from "react";
 
 import {
   FolderIcon,
-  FolderPlusIcon,
   LogoIcon,
   SidebarIcon,
+  SidebarRightIcon,
 } from "./Icons";
 
 const DRAG = { WebkitAppRegion: "drag" } as CSSProperties;
@@ -18,8 +18,10 @@ interface TopBarProps {
   folderLabel: string;
   isMac: boolean;
   sidebarCollapsed: boolean;
+  sourceOpen: boolean;
   onOpenFolder: () => void;
   onToggleSidebar: () => void;
+  onToggleSource: () => void;
 }
 
 export function TopBar({
@@ -28,8 +30,10 @@ export function TopBar({
   folderLabel,
   isMac,
   sidebarCollapsed,
+  sourceOpen,
   onOpenFolder,
   onToggleSidebar,
+  onToggleSource,
 }: TopBarProps) {
   return (
     <header
@@ -48,13 +52,17 @@ export function TopBar({
         style={NO_DRAG}
       >
         {AGENTS.map((agent) => {
-          const active = agent === "Claude Code";
+          const active = agent === "Claude Code" && Boolean(folder);
           return (
             <button
               key={agent}
               type="button"
               disabled={!active}
-              title={active ? undefined : `${agent} support is not built yet`}
+              title={
+                agent === "Claude Code"
+                  ? undefined
+                  : `${agent} support is not built yet`
+              }
               className={
                 active
                   ? "bg-om-raised text-om-amber flex h-6 items-center rounded-[4px] px-2.5 text-xs font-medium"
@@ -67,20 +75,16 @@ export function TopBar({
         })}
       </div>
 
-      <div className="flex min-w-0 flex-1 items-center gap-2">
-        <FolderIcon className="text-om-muted shrink-0" />
-        <span className="text-om-muted truncate font-mono text-xs">
-          {folder ? folderLabel : "no folder open"}
-        </span>
+      <div className="flex min-w-0 flex-1 items-center">
         <button
           type="button"
           onClick={onOpenFolder}
-          title="Open folder"
-          aria-label="Open folder"
+          title={folder ? "Open another folder" : "Open folder"}
           style={NO_DRAG}
-          className="border-om-border bg-om-bg text-om-muted hover:text-om-text hover:bg-om-raised flex size-7 shrink-0 items-center justify-center rounded-md border transition-colors"
+          className="text-om-muted hover:text-om-text hover:bg-om-raised flex h-7 min-w-0 max-w-full cursor-pointer items-center gap-2 rounded-md px-2 font-mono text-xs transition-colors"
         >
-          <FolderPlusIcon className="size-4" />
+          <FolderIcon className="shrink-0" />
+          <span className="truncate">{folder ? folderLabel : "Open folder…"}</span>
         </button>
       </div>
 
@@ -88,16 +92,32 @@ export function TopBar({
         <button
           type="button"
           onClick={onToggleSidebar}
+          disabled={!folder}
           title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
           aria-label={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
           aria-pressed={!sidebarCollapsed}
-          className={`border-om-border flex size-7 items-center justify-center rounded-md border transition-colors ${
+          className={`border-om-border flex size-7 items-center justify-center rounded-md border transition-colors disabled:cursor-default disabled:opacity-40 disabled:hover:text-om-muted ${
             sidebarCollapsed
               ? "bg-om-bg text-om-muted hover:text-om-text"
               : "bg-om-raised text-om-text"
           }`}
         >
           <SidebarIcon className="size-4" filled={!sidebarCollapsed} />
+        </button>
+        <button
+          type="button"
+          onClick={onToggleSource}
+          disabled={!folder}
+          title={sourceOpen ? "Hide source pane" : "Show source pane"}
+          aria-label={sourceOpen ? "Hide source pane" : "Show source pane"}
+          aria-pressed={sourceOpen}
+          className={`border-om-border flex size-7 items-center justify-center rounded-md border transition-colors disabled:cursor-default disabled:opacity-40 disabled:hover:text-om-muted ${
+            sourceOpen
+              ? "bg-om-raised text-om-text"
+              : "bg-om-bg text-om-muted hover:text-om-text"
+          }`}
+        >
+          <SidebarRightIcon className="size-4" filled={sourceOpen} />
         </button>
       </div>
     </header>

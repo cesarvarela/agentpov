@@ -25,6 +25,7 @@ import {
   relativeTo,
 } from "../lib/paths";
 import type { FileDetail } from "../hooks/useProject";
+import type { SourceTarget } from "../hooks/useSource";
 import {
   CheckIcon,
   DocIcon,
@@ -73,6 +74,41 @@ function EmptyRow({ text }: { text: string }) {
     <div className="text-om-muted flex h-[30px] items-center px-3 text-[11px]">
       {text}
     </div>
+  );
+}
+
+/** A card row that opens its backing file in the source pane. */
+function RowButton({
+  active,
+  bg,
+  height,
+  padding = "px-3",
+  title,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  /** Background class for the resting state, if the row has one. */
+  bg?: string;
+  height: string;
+  padding?: string;
+  title?: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={`border-om-border/60 flex w-full shrink-0 cursor-pointer items-center gap-2.5 border-t text-left transition-colors first:border-t-0 ${height} ${padding} ${
+        active
+          ? "bg-[#2a2418] shadow-[inset_2px_0_0_var(--om-amber)]"
+          : `${bg ?? ""} hover:bg-om-raised`
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -133,17 +169,28 @@ function InstructionRow({
   entry,
   folder,
   homeDir,
+  active,
+  onOpen,
 }: {
   entry: MemoryEntry;
   folder: string;
   homeDir: string;
+  active: boolean;
+  onOpen: () => void;
 }) {
   const isDirectory = entry.layer === "directory";
   const size = formatBytes(entry.bytes);
 
   if (entry.kind === "import") {
     return (
-      <div className="border-om-border/60 flex h-7 items-center gap-2.5 border-t bg-[#141721] pr-3 pl-[34px]">
+      <RowButton
+        active={active}
+        bg="bg-[#141721]"
+        height="h-7"
+        padding="pr-3 pl-[34px]"
+        title={entry.path}
+        onClick={onOpen}
+      >
         <ImportIcon className="text-om-teal shrink-0" />
         <Badge variant="teal" className="w-[52px] shrink-0 justify-center">
           import
@@ -158,15 +205,17 @@ function InstructionRow({
               }`
             : "inlined"}
         </span>
-      </div>
+      </RowButton>
     );
   }
 
   return (
-    <div
-      className={`border-om-border/60 flex h-[30px] items-center gap-2.5 border-t px-3 first:border-t-0 ${
-        isDirectory ? "bg-[#1c1d1a]" : ""
-      }`}
+    <RowButton
+      active={active}
+      bg={isDirectory ? "bg-[#1c1d1a]" : undefined}
+      height="h-[30px]"
+      title={entry.path}
+      onClick={onOpen}
     >
       <Badge
         variant={isDirectory ? "amber" : "default"}
@@ -191,7 +240,7 @@ function InstructionRow({
         {entry.reason}
         {size ? ` · ${size}` : ""}
       </span>
-    </div>
+    </RowButton>
   );
 }
 
@@ -222,6 +271,9 @@ interface ContextViewProps {
   file: string | null;
   homeDir: string;
   loading: boolean;
+  /** Key of the row currently shown in the source pane, if any. */
+  activeSourceKey: string | null;
+  onOpenSource: (target: SourceTarget) => void;
 }
 
 export function ContextView({
@@ -231,6 +283,8 @@ export function ContextView({
   file,
   homeDir,
   loading,
+  activeSourceKey,
+  onOpenSource,
 }: ContextViewProps) {
   if (!file) {
     return (
@@ -325,14 +379,35 @@ export function ContextView({
               }
             />
           ) : (
-            instructions.map((entry) => (
-              <InstructionRow
-                key={`${entry.kind}:${entry.path}:${entry.importedAtLine ?? 0}`}
-                entry={entry}
-                folder={folder}
-                homeDir={homeDir}
-              />
-            ))
+            instructions.map((entry) => {
+              const key = `${entry.kind}:${entry.path}:${entry.importedAtLine ?? 0}`;
+              return (
+                <InstructionRow
+                  key={key}
+                  entry={entry}
+                  folder={folder}
+                  homeDir={homeDir}
+                  active={activeSourceKey === key}
+                  onOpen={() =>
+                    onOpenSource({
+                      key,
+                      path: entry.path,
+                      layer: entry.layer,
+                      ...(entry.kind === "import" &&
+                      entry.importedAtLine &&
+                      entry.importedBy
+                        ? {
+                            importedAt: {
+                              line: entry.importedAtLine,
+                              parent: entry.importedBy,
+                            },
+                          }
+                        : {}),
+                    })
+                  }
+                />
+              );
+            })
           )}
         </Panel>
 
@@ -351,9 +426,18 @@ export function ContextView({
             <EmptyRow text="No memory files for this project." />
           ) : (
             memory.map((entry) => (
-              <div
+              <RowButton
                 key={entry.path}
-                className="border-om-border/60 flex h-8 items-center gap-2.5 border-t px-3 first:border-t-0"
+                active={activeSourceKey === `memory:${entry.path}`}
+                height="h-8"
+                title={entry.path}
+                onClick={() =>
+                  onOpenSource({
+                    key: `memory:${entry.path}`,
+                    path: entry.path,
+                    layer: entry.layer,
+                  })
+                }
               >
                 <Badge className="w-[66px] shrink-0 justify-center">
                   {layerLabel(entry.layer)}
@@ -365,7 +449,7 @@ export function ContextView({
                   {entry.content?.split("\n").find((line) => line.trim() !== "")
                     ?.trim() ?? entry.reason}
                 </span>
-              </div>
+              </RowButton>
             ))
           )}
         </Panel>
@@ -384,10 +468,21 @@ export function ContextView({
           ) : (
             context.permissions.map((rule, index) => {
               const note = ruleNote(rule);
+              const key = `permission:${rule.path}:${rule.rule}:${index}`;
               return (
-                <div
-                  key={`${rule.path}:${rule.rule}:${index}`}
-                  className="border-om-border/60 flex h-[30px] items-center gap-2.5 border-t px-3 first:border-t-0"
+                <RowButton
+                  key={key}
+                  active={activeSourceKey === key}
+                  height="h-[30px]"
+                  title={rule.path}
+                  onClick={() =>
+                    onOpenSource({
+                      key,
+                      path: rule.path,
+                      layer: rule.layer,
+                      matches: [`"${rule.rule}"`, rule.rule],
+                    })
+                  }
                 >
                   <Badge
                     variant={DECISION_VARIANT[rule.decision]}
@@ -416,7 +511,7 @@ export function ContextView({
                   <span className={`shrink-0 text-[11px] ${note.className}`}>
                     {note.text}
                   </span>
-                </div>
+                </RowButton>
               );
             })
           )}
@@ -431,9 +526,22 @@ export function ContextView({
             <EmptyRow text="No hooks fire on an Edit of this file." />
           ) : (
             hooks.map((hook, index) => (
-              <div
+              <RowButton
                 key={`${hook.path}:${hook.event}:${index}`}
-                className="border-om-border/60 flex h-8 items-center gap-2.5 border-t px-3 first:border-t-0"
+                active={
+                  activeSourceKey ===
+                  `hook:${hook.path}:${hook.event}:${index}`
+                }
+                height="h-8"
+                title={hook.path}
+                onClick={() =>
+                  onOpenSource({
+                    key: `hook:${hook.path}:${hook.event}:${index}`,
+                    path: hook.path,
+                    layer: hook.layer,
+                    matches: [`"${hook.command}"`, hook.command],
+                  })
+                }
               >
                 <span className="text-om-teal w-[92px] shrink-0 text-[11px] font-medium">
                   {hook.event}
@@ -455,7 +563,7 @@ export function ContextView({
                     ? `timeout ${hook.timeoutSeconds}s`
                     : "no timeout"}
                 </span>
-              </div>
+              </RowButton>
             ))
           )}
         </Panel>

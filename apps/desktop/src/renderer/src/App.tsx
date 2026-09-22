@@ -4,23 +4,50 @@ import { Button } from "@agentview/ui";
 
 import { ContextView } from "./components/ContextView";
 import { FileTree } from "./components/FileTree";
-import { SidebarStrip } from "./components/SidebarStrip";
+import { SourcePane, SourcePaneEmpty } from "./components/SourcePane";
 import { TopBar } from "./components/TopBar";
 import { useProject } from "./hooks/useProject";
+import { usePanePersistence } from "./hooks/usePanePersistence";
 import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
   useSidebar,
 } from "./hooks/useSidebar";
-import { basename, displayPath } from "./lib/paths";
+import { useSource } from "./hooks/useSource";
+import { displayPath } from "./lib/paths";
 
 const isMac = window.agentview?.platform === "darwin";
 const homeDir = window.agentview?.homeDir ?? "";
+
+const SOURCE_DEFAULT_WIDTH = 480;
+const SOURCE_MIN_WIDTH = 320;
+const SOURCE_MAX_WIDTH = 900;
+
+/** True while the user is typing somewhere, so Escape belongs to that field. */
+function typingInField(): boolean {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement)) return false;
+  if (active.isContentEditable) return true;
+  const tag = active.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+}
 
 export default function App() {
   const [appName, setAppName] = useState("agentview");
   const project = useProject();
   const sidebar = useSidebar();
+  const {
+    source,
+    open: sourceOpen,
+    openSource,
+    closeSource,
+    toggle: toggleSource,
+  } = useSource();
+  const sourcePane = usePanePersistence("source", {
+    defaultWidth: SOURCE_DEFAULT_WIDTH,
+    minWidth: SOURCE_MIN_WIDTH,
+    maxWidth: SOURCE_MAX_WIDTH,
+  });
 
   useEffect(() => {
     window.agentview
@@ -30,24 +57,47 @@ export default function App() {
   }, []);
 
   const { collapsed, recordWidth, setCollapsed } = sidebar;
+  const recordSourceWidth = sourcePane.recordWidth;
 
   const handleSizesChange = useCallback(
     (sizes: number[]) => {
       const width = sizes[0];
       if (!collapsed && width !== undefined) recordWidth(width);
+      const sourceWidth = sizes[2];
+      if (sourceOpen && sourceWidth !== undefined) {
+        recordSourceWidth(sourceWidth);
+      }
     },
-    [collapsed, recordWidth],
+    [collapsed, recordWidth, recordSourceWidth, sourceOpen],
   );
 
-  /** Fired when a drag past the minimum snaps the sidebar shut. */
+  /** Fired when a drag past the minimum snaps a side pane shut. */
   const handleVisibleChange = useCallback(
     (index: number, visible: boolean) => {
       if (index === 0) setCollapsed(!visible);
+      else if (index === 2 && !visible) closeSource();
     },
-    [setCollapsed],
+    [closeSource, setCollapsed],
   );
 
+  /** Escape closes the source pane, unless the user is typing in a field. */
+  useEffect(() => {
+    if (!sourceOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (typingInField()) return;
+      closeSource();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [closeSource, sourceOpen]);
+
   const { folder } = project;
+
+  /** Opening a folder always reveals the tree, even if it was collapsed before. */
+  useEffect(() => {
+    if (folder) setCollapsed(false);
+  }, [folder, setCollapsed]);
 
   return (
     <div className="bg-background text-foreground flex h-full flex-col">
@@ -57,18 +107,14 @@ export default function App() {
         folderLabel={folder ? displayPath(folder, null, homeDir) : ""}
         isMac={isMac}
         sidebarCollapsed={sidebar.collapsed}
+        sourceOpen={sourceOpen}
         onOpenFolder={() => void project.openFolder()}
         onToggleSidebar={sidebar.toggle}
+        onToggleSource={toggleSource}
       />
 
       {folder ? (
         <div className="flex min-h-0 flex-1">
-          {sidebar.collapsed ? (
-            <SidebarStrip
-              label={basename(folder)}
-              onExpand={() => setCollapsed(false)}
-            />
-          ) : null}
 
           <div className="min-w-0 flex-1">
             <Allotment
@@ -107,8 +153,35 @@ export default function App() {
                     file={project.selected}
                     homeDir={homeDir}
                     loading={project.loading}
+                    activeSourceKey={source?.key ?? null}
+                    onOpenSource={openSource}
                   />
                 </main>
+              </Allotment.Pane>
+
+              <Allotment.Pane
+                preferredSize={sourcePane.initialWidth}
+                minSize={SOURCE_MIN_WIDTH}
+                maxSize={SOURCE_MAX_WIDTH}
+                snap
+                visible={sourceOpen}
+              >
+                {source ? (
+                  <SourcePane
+                    source={source}
+                    folder={folder}
+                    homeDir={homeDir}
+                    onOpenParent={(path, line) =>
+                      openSource({
+                        key: `parent:${path}:${line}`,
+                        path,
+                        line,
+                      })
+                    }
+                  />
+                ) : (
+                  <SourcePaneEmpty />
+                )}
               </Allotment.Pane>
             </Allotment>
           </div>

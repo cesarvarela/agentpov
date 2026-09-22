@@ -89,14 +89,6 @@ export function PlusIcon(props: IconProps) {
   );
 }
 
-export function FolderPlusIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <path d="M1.75 3.75h4l1.5 2h7v6.5h-12.5z" />
-      <path d="M8 7.75v3M6.5 9.25h3" />
-    </Icon>
-  );
-}
 
 /**
  * VS Code style sidebar toggle. `filled` draws the left column solid, which is
@@ -113,6 +105,30 @@ export function SidebarIcon({
       {filled ? (
         <rect
           x="3.2"
+          y="4.2"
+          width="1.8"
+          height="7.6"
+          rx="0.9"
+          fill="currentColor"
+          stroke="none"
+        />
+      ) : null}
+    </Icon>
+  );
+}
+
+/** Mirror of {@link SidebarIcon}, for the right-hand source pane toggle. */
+export function SidebarRightIcon({
+  filled = false,
+  ...props
+}: IconProps & { filled?: boolean }) {
+  return (
+    <Icon {...props}>
+      <rect x="2" y="3" width="12" height="10" rx="2" />
+      <path d="M10 3v10" />
+      {filled ? (
+        <rect
+          x="11"
           y="4.2"
           width="1.8"
           height="7.6"
@@ -198,6 +214,16 @@ export function WarningIcon(props: IconProps) {
     <Icon {...props}>
       <path d="M8 2.25l6 10.5H2z" />
       <path d="M8 6.5v3M8 11.2v.1" />
+    </Icon>
+  );
+}
+
+export function ExternalLinkIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M9.5 2.5h4v4" />
+      <path d="M13.5 2.5L7.5 8.5" />
+      <path d="M12 9.5v3.5a.5.5 0 01-.5.5h-8a.5.5 0 01-.5-.5v-8a.5.5 0 01.5-.5H6.5" />
     </Icon>
   );
 }
