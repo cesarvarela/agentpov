@@ -185,7 +185,7 @@ describe(".claude/rules", () => {
     ]);
   });
 
-  it("follows @imports from a rule, inheriting its layer and loading mode", async () => {
+  it("follows @imports from a rule, inheriting its layer but loading at launch", async () => {
     const result = await run({
       [`${FOLDER}/.claude/rules/api.md`]: frontmatter(
         ["paths:", "  - src/api/**"],
@@ -196,13 +196,55 @@ describe(".claude/rules", () => {
 
     expect(result.memory.map((entry) => [entry.path, entry.kind, entry.loading])).toEqual([
       [`${FOLDER}/.claude/rules/api.md`, "rule", "on-read"],
-      [`${FOLDER}/docs/style.md`, "import", "on-read"],
+      [`${FOLDER}/docs/style.md`, "import", "always"],
     ]);
     expect(result.memory[1]).toMatchObject({
       layer: "project",
       importedBy: `${FOLDER}/.claude/rules/api.md`,
       importedAtLine: 6,
-      scopedToFile: true,
+      scopedToFile: false,
+      reason:
+        "imported by api.md at launch, even though the rule itself is conditional",
+    });
+  });
+
+  // Checked against Claude Code 2.1.277 in the `memory-rules` fixture: at launch
+  // `/context` listed `docs/payments-notes.md` as a project memory file even
+  // though its importing rule (`paths: ["src/{api,billing}/**"]`) was not
+  // listed, so a rule's imports are resolved eagerly and load either way.
+  it("loads a conditional rule's import even when the rule's paths miss the target", async () => {
+    const result = await run(
+      {
+        [`${FOLDER}/CLAUDE.md`]: "project md",
+        [`${FOLDER}/.claude/rules/general.md`]: "always",
+        [`${FOLDER}/.claude/rules/api/payments.md`]: frontmatter(
+          ['paths: ["src/{api,billing}/**"]'],
+          "See @../../../docs/payments-notes.md for details.",
+        ),
+        [`${FOLDER}/docs/payments-notes.md`]: "notes",
+      },
+      "src/web/page.tsx",
+    );
+
+    // Rules first, then their imports — the order `/context` printed.
+    expect(result.memory.map((entry) => [entry.path, entry.kind, entry.loading])).toEqual([
+      [`${FOLDER}/CLAUDE.md`, "claude-md", "always"],
+      [`${FOLDER}/.claude/rules/general.md`, "rule", "always"],
+      [`${FOLDER}/docs/payments-notes.md`, "import", "always"],
+    ]);
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it("keeps a plain import reason for an unconditional rule", async () => {
+    const result = await run({
+      [`${FOLDER}/.claude/rules/general.md`]: "See @../../docs/style.md for details.",
+      [`${FOLDER}/docs/style.md`]: "style",
+    });
+
+    expect(result.memory[1]).toMatchObject({
+      kind: "import",
+      loading: "always",
+      reason: "inlined at line 1 of general.md",
     });
   });
 

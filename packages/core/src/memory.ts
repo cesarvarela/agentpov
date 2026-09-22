@@ -119,11 +119,23 @@ async function readMemoryFile(
   return entry;
 }
 
+/**
+ * How a rule file's imports reach context. Checked against Claude Code 2.1.277:
+ * `/context` at launch lists the import target of a `paths:`-scoped rule as a
+ * project memory file even though the rule itself is not listed, so the CLI
+ * resolves the imports of every rule eagerly and loads them always.
+ */
+interface ImportOverride {
+  loading: MemoryLoading;
+  reason: (parentName: string, line: number) => string;
+}
+
 async function collectImports(
   run: ResolveRun,
   parent: MemoryEntry,
   seen: Set<string>,
   depth: number,
+  override?: ImportOverride,
 ): Promise<MemoryEntry[]> {
   if (depth > MAX_IMPORT_DEPTH) return [];
   const content = parent.content ?? "";
@@ -137,12 +149,19 @@ async function collectImports(
     seen.add(target);
     const entry = await readMemoryFile(
       run,
-      { path: target, layer: parent.layer, scopedToFile: parent.scopedToFile },
+      {
+        path: target,
+        layer: parent.layer,
+        scopedToFile: override ? false : parent.scopedToFile,
+      },
       "import",
-      `inlined at line ${reference.line} of ${parentName}`,
+      override
+        ? override.reason(parentName, reference.line)
+        : `inlined at line ${reference.line} of ${parentName}`,
       // An import is inlined into its parent, so it reaches context exactly
-      // when the parent does.
-      parent.loading,
+      // when the parent does — unless the parent is a rule, whose imports the
+      // CLI loads at launch either way.
+      override ? override.loading : parent.loading,
       { importedBy: parent.path, importedAtLine: reference.line },
     );
     if (!entry) {
@@ -152,7 +171,7 @@ async function collectImports(
       continue;
     }
     out.push(entry);
-    out.push(...(await collectImports(run, entry, seen, depth + 1)));
+    out.push(...(await collectImports(run, entry, seen, depth + 1, override)));
   }
   return out;
 }
@@ -276,10 +295,20 @@ function ruleGlobHitsTarget(run: ResolveRun, glob: string): boolean {
   return false;
 }
 
+/** `imported by payments.md at launch, even though the rule itself is conditional` */
+export function reasonForConditionalRuleImport(ruleName: string): string {
+  return `imported by ${ruleName} at launch, even though the rule itself is conditional`;
+}
+
 /**
  * `.claude/rules/**\/*.md`. A rule without `paths:` loads at launch, like
  * `.claude/CLAUDE.md`; one with `paths:` loads only when Claude reads a
  * matching file, so it is listed only when the target is covered.
+ *
+ * A rule's `@imports` are a separate matter: the CLI resolves them eagerly and
+ * loads them at launch whether or not the rule's `paths:` cover the target, so
+ * they are always emitted, and after the rules themselves (matching the order
+ * `/context` printed in the `memory-rules` fixture).
  */
 async function collectRules(
   run: ResolveRun,
@@ -288,33 +317,43 @@ async function collectRules(
   seen: Set<string>,
 ): Promise<MemoryEntry[]> {
   const out: MemoryEntry[] = [];
+  const imports: MemoryEntry[] = [];
+
   for (const path of await listRuleFiles(run, root)) {
     if (seen.has(path)) continue;
     const content = await readText(run, path);
     if (content === null) continue;
     const globs = frontmatterList(parseFrontmatterFields(content), "paths");
+    const conditional = globs.length > 0;
+    const matches =
+      !conditional || globs.some((glob) => ruleGlobHitsTarget(run, glob));
 
-    let candidate: Candidate;
-    let reason: string;
-    let loading: MemoryLoading;
-    if (globs.length === 0) {
-      candidate = { path, layer, scopedToFile: false };
-      reason = REASON_ALWAYS;
-      loading = "always";
-    } else {
-      if (!globs.some((glob) => ruleGlobHitsTarget(run, glob))) continue;
-      candidate = { path, layer, scopedToFile: true, globs };
-      reason = reasonForRuleGlobs(globs);
-      loading = "on-read";
-    }
+    const candidate: Candidate = conditional
+      ? { path, layer, scopedToFile: true, globs }
+      : { path, layer, scopedToFile: false };
+    const reason = conditional ? reasonForRuleGlobs(globs) : REASON_ALWAYS;
+    const loading: MemoryLoading = conditional ? "on-read" : "always";
 
-    seen.add(path);
     const entry = await readMemoryFile(run, candidate, "rule", reason, loading);
     if (!entry) continue;
-    out.push(entry);
-    out.push(...(await collectImports(run, entry, seen, 1)));
+    if (matches) {
+      seen.add(path);
+      out.push(entry);
+    }
+    // A conditional rule's imports still load at launch, so they are emitted
+    // even when the rule itself is left out.
+    const ruleName = run.p.basename(path);
+    imports.push(
+      ...(await collectImports(run, entry, seen, 1, {
+        loading: "always",
+        reason: conditional
+          ? () => reasonForConditionalRuleImport(ruleName)
+          : (parentName, line) => `inlined at line ${line} of ${parentName}`,
+      })),
+    );
   }
-  return out;
+
+  return [...out, ...imports];
 }
 
 /** Every CLAUDE.md, rule, import and memory file that applies, lowest precedence first. */

@@ -188,6 +188,10 @@ describe("skill discovery", () => {
         [`${FOLDER}/src/.claude/skills/scaffold/SKILL.md`]: skill(
           "---\nname: scaffold\n---\n",
         ),
+        [`${HOME}/.claude/plugins/installed_plugins.json`]: JSON.stringify({
+          version: 2,
+          plugins: { "hookify@official": { version: "1.0.0" } },
+        }),
         [`${HOME}/.claude/plugins/marketplaces/official/plugins/hookify/skills/writing-rules/SKILL.md`]:
           skill("---\nname: writing-rules\ndescription: Hook rules\n---\n"),
       },
@@ -198,7 +202,7 @@ describe("skill discovery", () => {
       result.skills.map((s) => [s.name, s.source, s.layer, s.shortName]),
     ).toEqual([
       ["tidy", "personal", "user", "tidy"],
-      ["docs", "synced", "user", "docs"],
+      ["anthropic-skills:docs", "synced", "user", "docs"],
       ["deploy", "project", "project", "deploy"],
       ["src:scaffold", "nested", "directory", "scaffold"],
       ["hookify:writing-rules", "plugin", "user", "writing-rules"],
@@ -247,6 +251,111 @@ describe("skill discovery", () => {
       targetKind: "directory",
     });
     expect(result.skills.map((s) => s.name)).toEqual(["apps/web:build"]);
+  });
+
+  describe("plugin skills", () => {
+    const marketplace = `${HOME}/.claude/plugins/marketplaces/official`;
+    const files = {
+      [`${marketplace}/plugins/hookify/skills/writing-rules/SKILL.md`]:
+        "---\nname: writing-rules\n---\n",
+      [`${marketplace}/external_plugins/telegram/skills/access/SKILL.md`]:
+        "---\nname: access\n---\n",
+    };
+
+    it("reports none when installed_plugins.json is missing", async () => {
+      expect((await run(files)).skills).toEqual([]);
+    });
+
+    it("reports none when installed_plugins.json lists no plugins", async () => {
+      // The shape seen on a machine with marketplaces downloaded but nothing
+      // installed; the real CLI lists no plugin skills there either.
+      const result = await run({
+        ...files,
+        [`${HOME}/.claude/plugins/installed_plugins.json`]: JSON.stringify({
+          version: 2,
+          plugins: {},
+        }),
+      });
+      expect(result.skills).toEqual([]);
+    });
+
+    it("reports only the installed plugins, from either marketplace subdir", async () => {
+      const result = await run({
+        ...files,
+        [`${HOME}/.claude/plugins/installed_plugins.json`]: JSON.stringify({
+          version: 2,
+          plugins: { "telegram@official": true },
+        }),
+      });
+      expect(result.skills.map((s) => [s.name, s.plugin])).toEqual([
+        ["telegram:access", "telegram"],
+      ]);
+    });
+
+    it("follows an explicit install path and an enabled: false flag", async () => {
+      const result = await run({
+        [`/opt/plugins/formatter/skills/tidy/SKILL.md`]: "---\nname: tidy\n---\n",
+        ...files,
+        [`${HOME}/.claude/plugins/installed_plugins.json`]: JSON.stringify({
+          version: 2,
+          plugins: {
+            "formatter@company": { installPath: "/opt/plugins/formatter" },
+            "hookify@official": { enabled: false },
+          },
+        }),
+      });
+      expect(result.skills.map((s) => s.name)).toEqual(["formatter:tidy"]);
+    });
+
+    it("treats enabledPlugins: true as installed and false as disabled", async () => {
+      const enabled = (value: boolean): Record<string, string> => ({
+        [`${FOLDER}/.claude/settings.json`]: JSON.stringify({
+          enabledPlugins: { "hookify@official": value },
+        }),
+      });
+
+      expect((await run({ ...files, ...enabled(true) })).skills.map((s) => s.name)).toEqual([
+        "hookify:writing-rules",
+      ]);
+      expect(
+        (
+          await run({
+            ...files,
+            [`${HOME}/.claude/plugins/installed_plugins.json`]: JSON.stringify({
+              plugins: { "hookify@official": true },
+            }),
+            ...enabled(false),
+          })
+        ).skills,
+      ).toEqual([]);
+    });
+
+    it("finds a plugin copied into the version cache", async () => {
+      const result = await run({
+        [`${HOME}/.claude/plugins/cache/official/hookify/1.2.0/skills/writing-rules/SKILL.md`]:
+          "---\nname: writing-rules\n---\n",
+        [`${HOME}/.claude/plugins/installed_plugins.json`]: JSON.stringify({
+          plugins: { "hookify@official": true },
+        }),
+      });
+      expect(result.skills.map((s) => s.name)).toEqual(["hookify:writing-rules"]);
+    });
+  });
+
+  it("namespaces every synced skill as anthropic-skills:<name>", async () => {
+    const bucket = `${HOME}/.claude/skills/synced/abc-123_def-456`;
+    const result = await run({
+      [`${bucket}/manifest.json`]: JSON.stringify({
+        skills: [{ skillId: "pdf", name: "pdf", source: "anthropic" }],
+      }),
+      [`${bucket}/pdf/SKILL.md`]: "---\nname: pdf\n---\n",
+      [`${bucket}/xlsx/SKILL.md`]: "---\nname: xlsx\n---\n",
+    });
+
+    expect(result.skills.map((s) => [s.name, s.shortName])).toEqual([
+      ["anthropic-skills:pdf", "pdf"],
+      ["anthropic-skills:xlsx", "xlsx"],
+    ]);
   });
 
   it("shadows a project skill with the personal skill of the same name", async () => {

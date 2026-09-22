@@ -58,7 +58,7 @@ export async function resolveContext(
   const settings = await collectSettings(run);
   const permissions = collectPermissions(run, settings);
   const hooks = collectHooks(settings);
-  const skills = await collectSkills(run);
+  const skills = await collectSkills(run, settings);
   const agents = await collectAgents(run);
   const mcpServers = await collectMcpServers(run, settings);
 

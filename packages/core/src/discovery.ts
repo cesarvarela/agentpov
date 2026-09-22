@@ -164,6 +164,14 @@ async function collectSkillsFrom(
   return out;
 }
 
+/**
+ * Every synced skill is namespaced `anthropic-skills:<name>`. Checked against
+ * Claude Code 2.1.277: `/context` lists them as `anthropic-skills:docs`,
+ * `anthropic-skills:pdf`, and the docs (/skills) note a synced skill stays
+ * callable as `/anthropic-skills:<name>` when it loses its short name.
+ */
+const SYNCED_NAMESPACE = "anthropic-skills:";
+
 /** `~/.claude/skills/synced/<id>/<name>/SKILL.md`, synced from claude.ai. */
 async function collectSyncedSkills(
   run: ResolveRun,
@@ -182,53 +190,203 @@ async function collectSyncedSkills(
         root: run.p.join(syncedRoot, bucket),
         layer: "user",
         source: "synced",
+        namespace: SYNCED_NAMESPACE,
       })),
     );
   }
   return out;
 }
 
-/** How deep under `~/.claude/plugins` to look for a `skills` directory. */
-const PLUGIN_SCAN_DEPTH = 6;
+/** One entry of `~/.claude/plugins/installed_plugins.json`. */
+interface InstalledPlugin {
+  /** The manifest key, `<plugin>@<marketplace>` in the v2 format. */
+  key: string;
+  name: string;
+  marketplace?: string;
+  /** An explicit install path, when the entry carries one. */
+  path?: string;
+}
+
+function firstString(record: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.length > 0) return value;
+  }
+  return undefined;
+}
 
 /**
- * Plugin skills. On this machine the installed marketplaces look like
- * `~/.claude/plugins/marketplaces/<marketplace>/plugins/<plugin>/skills/<name>/SKILL.md`
- * (and `.../external_plugins/<plugin>/skills/...`), so rather than hard-coding
- * that shape we walk for any directory named `skills` and take the plugin name
- * from its parent directory.
+ * Reads `installed_plugins.json`. The v2 format keys `plugins` by
+ * `<plugin>@<marketplace>`; the value may be an object (with an install path
+ * and/or an `enabled` flag) or a bare boolean. An older shape keys by
+ * marketplace with an array of plugin names, so both are accepted.
  */
-async function collectPluginSkills(run: ResolveRun): Promise<SkillEntry[]> {
-  const root = run.p.join(userClaudeDir(run), "plugins");
-  const out: SkillEntry[] = [];
+export function parseInstalledPlugins(value: unknown): InstalledPlugin[] {
+  const plugins = isRecord(value) ? value["plugins"] : undefined;
+  if (!isRecord(plugins)) return [];
 
-  const walk = async (dir: string, depth: number): Promise<void> => {
-    if (depth > PLUGIN_SCAN_DEPTH) return;
-    const entries = (await listDir(run, dir))
-      .filter((entry) => entry.isDirectory)
-      .map((entry) => entry.name)
-      .sort();
-
-    for (const name of entries) {
-      const child = run.p.join(dir, name);
-      if (name === "skills" && dir !== root) {
-        const plugin = run.p.basename(dir);
-        out.push(
-          ...(await collectSkillsFrom(run, {
-            root: child,
-            layer: "user",
-            source: "plugin",
-            namespace: `${plugin}:`,
-            plugin,
-          })),
-        );
-        continue;
+  const out: InstalledPlugin[] = [];
+  for (const [key, entry] of Object.entries(plugins)) {
+    if (Array.isArray(entry)) {
+      for (const name of entry) {
+        if (typeof name === "string") {
+          out.push({ key: `${name}@${key}`, name, marketplace: key });
+        }
       }
-      await walk(child, depth + 1);
+      continue;
     }
-  };
+    if (entry === false) continue;
 
-  await walk(root, 0);
+    const at = key.lastIndexOf("@");
+    const plugin: InstalledPlugin = {
+      key,
+      name: at > 0 ? key.slice(0, at) : key,
+    };
+    if (at > 0) plugin.marketplace = key.slice(at + 1);
+
+    if (isRecord(entry)) {
+      if (entry["enabled"] === false) continue;
+      const path = firstString(entry, ["installPath", "path", "installLocation", "installedPath"]);
+      if (path) plugin.path = path;
+      const name = firstString(entry, ["name"]);
+      if (name) plugin.name = name;
+      const marketplace = firstString(entry, ["marketplace", "marketplaceName", "source"]);
+      if (marketplace) plugin.marketplace = marketplace;
+    }
+    out.push(plugin);
+  }
+  return out;
+}
+
+/**
+ * `enabledPlugins` in a settings file: docs (/plugins) show
+ * `{ "<plugin>@<marketplace>": true }`, written by `claude plugin install` at
+ * the chosen scope, and `false` for an installed-but-disabled plugin. The
+ * highest-precedence file that mentions the plugin decides, like the MCP
+ * approval keys.
+ */
+function pluginEnabledSetting(
+  key: string,
+  settings: SettingsEntry[],
+): boolean | undefined {
+  for (const entry of [...settings].reverse()) {
+    const enabled = entry.values["enabledPlugins"];
+    if (!isRecord(enabled)) continue;
+    const value = enabled[key];
+    if (typeof value === "boolean") return value;
+  }
+  return undefined;
+}
+
+/** Plugin keys turned on in settings but absent from `installed_plugins.json`. */
+function pluginsFromSettings(settings: SettingsEntry[]): InstalledPlugin[] {
+  const keys = new Set<string>();
+  for (const entry of settings) {
+    const enabled = entry.values["enabledPlugins"];
+    if (!isRecord(enabled)) continue;
+    for (const key of Object.keys(enabled)) keys.add(key);
+  }
+
+  const out: InstalledPlugin[] = [];
+  for (const key of [...keys].sort()) {
+    const at = key.lastIndexOf("@");
+    const plugin: InstalledPlugin = { key, name: at > 0 ? key.slice(0, at) : key };
+    if (at > 0) plugin.marketplace = key.slice(at + 1);
+    out.push(plugin);
+  }
+  return out;
+}
+
+async function subdirectories(run: ResolveRun, dir: string): Promise<string[]> {
+  return (await listDir(run, dir))
+    .filter((entry) => entry.isDirectory)
+    .map((entry) => entry.name)
+    .sort();
+}
+
+/**
+ * Where a plugin's files live. An entry carrying its own install path is
+ * trusted; otherwise both shapes seen in practice are tried:
+ *
+ * - `~/.claude/plugins/marketplaces/<marketplace>/{plugins,external_plugins}/<plugin>`,
+ *   the checkout a registered marketplace leaves behind
+ *   (`known_marketplaces.json` → `installLocation`)
+ * - `~/.claude/plugins/cache/<marketplace>/<plugin>/<version>`, the local cache
+ *   the docs (/plugins-reference) describe for copied plugins
+ */
+async function pluginRoots(
+  run: ResolveRun,
+  pluginsDir: string,
+  plugin: InstalledPlugin,
+): Promise<string[]> {
+  if (plugin.path) return [plugin.path];
+
+  const marketplacesDir = run.p.join(pluginsDir, "marketplaces");
+  const cacheDir = run.p.join(pluginsDir, "cache");
+  const marketplaces = plugin.marketplace
+    ? [plugin.marketplace]
+    : [
+        ...new Set([
+          ...(await subdirectories(run, marketplacesDir)),
+          ...(await subdirectories(run, cacheDir)),
+        ]),
+      ].sort();
+
+  const out: string[] = [];
+  for (const marketplace of marketplaces) {
+    for (const subdir of ["plugins", "external_plugins"]) {
+      out.push(run.p.join(marketplacesDir, marketplace, subdir, plugin.name));
+    }
+    const cached = run.p.join(cacheDir, marketplace, plugin.name);
+    out.push(cached);
+    for (const version of await subdirectories(run, cached)) {
+      out.push(run.p.join(cached, version));
+    }
+  }
+  return out;
+}
+
+/**
+ * Skills from *installed* plugins only. Checked against Claude Code 2.1.277:
+ * `~/.claude/plugins/marketplaces/**` holds every plugin a marketplace ships,
+ * but `/context` lists plugin skills only for the plugins recorded in
+ * `installed_plugins.json` — with that file empty, none at all. A plugin turned
+ * off through the `enabledPlugins` setting contributes nothing either.
+ */
+async function collectPluginSkills(
+  run: ResolveRun,
+  settings: SettingsEntry[],
+): Promise<SkillEntry[]> {
+  const pluginsDir = run.p.join(userClaudeDir(run), "plugins");
+  const manifest = await readJsonFile(
+    run,
+    run.p.join(pluginsDir, "installed_plugins.json"),
+  );
+  const installed = parseInstalledPlugins(manifest);
+  const byKey = new Map(installed.map((plugin) => [plugin.key, plugin]));
+  for (const plugin of pluginsFromSettings(settings)) {
+    if (!byKey.has(plugin.key)) installed.push(plugin);
+  }
+
+  const out: SkillEntry[] = [];
+  const seen = new Set<string>();
+  for (const plugin of installed) {
+    if (pluginEnabledSetting(plugin.key, settings) === false) continue;
+    for (const root of await pluginRoots(run, pluginsDir, plugin)) {
+      const skills = await collectSkillsFrom(run, {
+        root: run.p.join(root, "skills"),
+        layer: "user",
+        source: "plugin",
+        namespace: `${plugin.name}:`,
+        plugin: plugin.name,
+      });
+      for (const skill of skills) {
+        if (seen.has(skill.path)) continue;
+        seen.add(skill.path);
+        out.push(skill);
+      }
+    }
+  }
   return out;
 }
 
@@ -298,7 +456,10 @@ function markShadowed<T extends { path: string; layer: ConfigLayer }>(
  * `.claude/skills`, every `.claude/skills` between the project root and the
  * target, and plugins under `~/.claude/plugins`.
  */
-export async function collectSkills(run: ResolveRun): Promise<SkillEntry[]> {
+export async function collectSkills(
+  run: ResolveRun,
+  settings: SettingsEntry[] = [],
+): Promise<SkillEntry[]> {
   const userSkills = run.p.join(userClaudeDir(run), "skills");
   const out: SkillEntry[] = [
     ...(await collectSkillsFrom(run, {
@@ -314,7 +475,7 @@ export async function collectSkills(run: ResolveRun): Promise<SkillEntry[]> {
       source: "project",
     })),
     ...(await collectNestedSkills(run)),
-    ...(await collectPluginSkills(run)),
+    ...(await collectPluginSkills(run, settings)),
   ];
 
   markShadowed(
