@@ -191,11 +191,11 @@ export default function App() {
                     source={source}
                     folder={folder}
                     homeDir={homeDir}
-                    onOpenParent={(path, line) =>
+                    onOpenPath={(path, line) =>
                       openSource({
-                        key: `parent:${path}:${line}`,
+                        key: `path:${path}`,
                         path,
-                        line,
+                        ...(line === undefined ? {} : { line }),
                       })
                     }
                     canGoBack={canGoBack}
