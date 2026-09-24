@@ -113,6 +113,14 @@ The workflow fails early if any of them is missing, and checks the result with
 `.github/workflows/ci.yml` runs `pnpm typecheck` and the core tests on every
 push and pull request to `main`.
 
+### Landing page
+
+`apps/landing` is a static export (`output: "export"`). `.github/workflows/pages.yml`
+builds it and deploys it to GitHub Pages on every push to `main` that touches
+the landing or `packages/ui`, served at `https://cesarvarela.github.io/agentview/`.
+The workflow passes the Pages base path (`/agentview`) as `PAGES_BASE_PATH`;
+with a custom domain it is empty and nothing else changes.
+
 ## Notes
 
 - The desktop app uses [`electron-vite`](https://electron-vite.org) for the

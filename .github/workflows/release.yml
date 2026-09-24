@@ -84,6 +84,16 @@ jobs:
           pnpm exec electron-builder --mac --publish never
           -c.extraMetadata.version=${{ steps.version.outputs.version }}
 
+      - name: Notarize and staple the DMG
+        working-directory: apps/desktop/release
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          xcrun notarytool submit agentview-mac.dmg --wait \
+            --key "$APPLE_API_KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER"
+          xcrun stapler staple agentview-mac.dmg
+
       - name: Verify signature and notarization
         working-directory: apps/desktop/release
         run: |
@@ -91,6 +101,8 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$app"
           xcrun stapler validate "$app"
           spctl --assess --type execute --verbose=4 "$app"
+          xcrun stapler validate agentview-mac.dmg
+          spctl --assess --type open --context context:primary-signature --verbose=4 agentview-mac.dmg
           lipo -archs "$app/Contents/MacOS/agentview"
           ls -lh agentview-mac.dmg
 

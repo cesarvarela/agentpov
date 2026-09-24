@@ -7,6 +7,13 @@
       "runtimeArgs": ["--filter", "@agentview/landing", "dev"],
       "port": 4000,
       "autoPort": false
+    },
+    {
+      "name": "landing-pages",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "mkdir -p /tmp/agentview-pages && ln -sfn \"$PWD/apps/landing/out\" /tmp/agentview-pages/agentview && python3 -m http.server 4003 -d /tmp/agentview-pages"],
+      "port": 4003,
+      "autoPort": false
     }
   ]
 }

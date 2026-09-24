@@ -33,5 +33,8 @@ dmg:
   artifactName: agentview-mac.${ext}
   title: ${productName}
   writeUpdateInfo: false
+  # Sign the DMG itself; the release workflow then notarizes and staples it so
+  # the downloaded file passes Gatekeeper, not just the app inside it.
+  sign: true
 
 publish: null
