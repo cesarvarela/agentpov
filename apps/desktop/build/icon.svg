@@ -1,0 +1,20 @@
+<!--
+  Placeholder app icon: the TopBar LogoIcon cube in the app accent (amber,
+  --om-amber) on the window background (--om-bg), inside the macOS 824px
+  rounded-square safe area. Regenerate icon.icns with `pnpm make-icon`.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1e222a"/>
+      <stop offset="1" stop-color="#101216"/>
+    </linearGradient>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <rect x="101.5" y="101.5" width="821" height="821" rx="183.5" fill="none" stroke="#2a2f38" stroke-width="3"/>
+  <!-- LogoIcon paths (16px grid) scaled 34x around the center. -->
+  <g transform="translate(512 512) scale(34) translate(-8 -8)" fill="none" stroke="#e8b04c" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 1.75l5.5 3.1v6.3L8 14.25 2.5 11.15V4.85z"/>
+    <path d="M8 8.05l5.5-3.2M8 8.05v6.2M8 8.05L2.5 4.85"/>
+  </g>
+</svg>

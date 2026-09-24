@@ -5,8 +5,11 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   main: {
-    // @agentview/core is a pure-ESM workspace package; bundling it keeps the
-    // CommonJS main bundle from having to require() an ES module at runtime.
+    // externalizeDepsPlugin only externalizes package.json `dependencies`.
+    // The desktop package keeps every library in devDependencies so all of it
+    // is bundled into out/ and the packaged app ships without node_modules
+    // (see electron-builder.yml). @agentview/core is excluded explicitly as
+    // well: it is pure ESM and must not be require()d from the CJS main bundle.
     plugins: [externalizeDepsPlugin({ exclude: ["@agentview/core"] })],
     build: {
       rollupOptions: {

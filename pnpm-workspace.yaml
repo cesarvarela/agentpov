@@ -5,3 +5,7 @@ packages:
 onlyBuiltDependencies:
   - esbuild
   - unrs-resolver
+
+# Pulled in by electron-builder for Windows installers; we only ship macOS.
+ignoredBuiltDependencies:
+  - electron-winstaller

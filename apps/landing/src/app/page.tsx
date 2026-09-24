@@ -7,6 +7,11 @@ import {
   CardTitle,
 } from "@agentview/ui";
 
+const REPO_URL = "https://github.com/cesarvarela/agentview";
+// Stable asset name (see apps/desktop/electron-builder.yml), so this always
+// resolves to the newest release.
+const DOWNLOAD_URL = `${REPO_URL}/releases/latest/download/agentview-mac.dmg`;
+
 const features = [
   {
     title: "Instructions",
@@ -41,11 +46,20 @@ export default function Home() {
           exactly which instructions, settings, permission rules, hooks, skills,
           agents and MCP servers are in effect — and where each one came from.
         </p>
-        <div className="flex flex-wrap items-center gap-3">
-          <Button size="lg">Download for macOS</Button>
-          <Button size="lg" variant="outline">
-            Read the docs
-          </Button>
+        <div className="flex flex-col items-start gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button size="lg" asChild>
+              <a href={DOWNLOAD_URL}>Download for macOS</a>
+            </Button>
+            <Button size="lg" variant="outline" asChild>
+              <a href={REPO_URL} target="_blank" rel="noopener noreferrer">
+                View on GitHub
+              </a>
+            </Button>
+          </div>
+          <p className="text-muted-foreground text-xs">
+            macOS 13+ · Apple Silicon &amp; Intel
+          </p>
         </div>
         <p className="text-muted-foreground font-mono text-xs">
           ~/projects/acme/shop-api → src/api/payments.ts

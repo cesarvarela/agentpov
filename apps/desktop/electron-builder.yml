@@ -1,0 +1,37 @@
+# electron-builder config for the macOS release (see README "Releasing").
+# Everything the app needs is bundled into out/ by electron-vite, so the
+# package ships no node_modules: runtime libraries live in devDependencies.
+appId: com.cesarvarela.agentview
+productName: agentview
+copyright: Copyright © 2026 Cesar Varela
+
+directories:
+  buildResources: build
+  output: release
+
+files:
+  - out/**/*
+  - package.json
+
+mac:
+  target:
+    - target: dmg
+      arch: universal
+  category: public.app-category.developer-tools
+  icon: build/icon.icns
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  # Notarizes with @electron/notarize (notarytool) when APPLE_API_KEY (path to
+  # the .p8), APPLE_API_KEY_ID and APPLE_API_ISSUER are set; skipped otherwise.
+  notarize: true
+
+dmg:
+  # Stable, version-less name so the landing page can link to
+  # releases/latest/download/agentview-mac.dmg.
+  artifactName: agentview-mac.${ext}
+  title: ${productName}
+  writeUpdateInfo: false
+
+publish: null

@@ -1,33 +1,39 @@
 {
   "name": "@agentview/desktop",
+  "productName": "agentview",
   "version": "0.0.0",
   "private": true,
   "description": "agentview desktop app (Electron + Vite + React)",
+  "author": "Cesar Varela",
+  "license": "MIT",
+  "homepage": "https://github.com/cesarvarela/agentview",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
+    "dist": "electron-vite build && electron-builder --mac --publish never",
+    "dist:unsigned": "electron-vite build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --publish never -c.mac.identity=null -c.mac.notarize=false",
+    "make-icon": "electron scripts/make-icon.cjs",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "lint": "echo \"(no linter configured for @agentview/desktop)\""
   },
-  "dependencies": {
+  "devDependencies": {
     "@agentview/core": "workspace:*",
     "@agentview/ui": "workspace:*",
-    "allotment": "^1.20.5",
-    "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
-  },
-  "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.1",
     "@vitejs/plugin-react": "^5.2.0",
+    "allotment": "^1.20.5",
     "electron": "^44.4.3",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
     "vite": "^7.3.6"
