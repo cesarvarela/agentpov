@@ -1,6 +1,6 @@
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell, webContents } from "electron";
 import { resolveContext } from "@agentview/core";
 
 import type {
@@ -92,7 +92,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle(
     "ssh:connect",
-    (_event, host: string): Promise<RemoteInfo> => connectRemote(host),
+    (event, host: string): Promise<RemoteInfo> => connectRemote(host, event.sender.id),
   );
 
   ipcMain.handle(
@@ -105,20 +105,38 @@ app.whenReady().then(() => {
 
   ipcMain.handle("ssh:answer", (_event, id: number, value: string | null) => {
     prompts.get(id)?.(value);
-    prompts.delete(id);
   });
 
   startAskpass(
-    (prompt: SshPrompt) =>
+    (prompt: SshPrompt, windowId) =>
       new Promise<string | null>((resolve) => {
-        const win =
-          BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
-        if (!win) {
+        const requester = windowId === null ? undefined : webContents.fromId(windowId);
+        const contents =
+          (requester && !requester.isDestroyed() ? requester : undefined) ??
+          (BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0])?.webContents;
+        if (!contents) {
           resolve(null);
           return;
         }
-        prompts.set(prompt.id, resolve);
-        win.webContents.send("ssh:prompt", prompt);
+
+        // A prompt nobody can answer any more is a cancel; otherwise ssh (and
+        // every later connect to that host) would wait on it forever.
+        const cancel = () => settle(null);
+        const onNavigate = (details: { isSameDocument: boolean; isMainFrame: boolean }) => {
+          if (details.isMainFrame && !details.isSameDocument) cancel();
+        };
+        const settle = (value: string | null) => {
+          prompts.delete(prompt.id);
+          contents.off("destroyed", cancel);
+          contents.off("render-process-gone", cancel);
+          contents.off("did-start-navigation", onNavigate);
+          resolve(value);
+        };
+        contents.once("destroyed", cancel);
+        contents.once("render-process-gone", cancel);
+        contents.on("did-start-navigation", onNavigate);
+        prompts.set(prompt.id, settle);
+        contents.send("ssh:prompt", prompt);
       }),
   );
 

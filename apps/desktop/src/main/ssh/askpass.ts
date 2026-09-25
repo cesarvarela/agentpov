@@ -12,14 +12,18 @@ import type { SshPrompt } from "../../shared/ipc";
  * back. The helper is a Node script run by this app's own binary.
  */
 
-export type PromptHandler = (prompt: SshPrompt) => Promise<string | null>;
+/** `windowId` is the webContents that started the connection, when known. */
+export type PromptHandler = (
+  prompt: SshPrompt,
+  windowId: number | null,
+) => Promise<string | null>;
 
 const HELPER_JS = `
 const net = require("node:net");
 const socket = net.connect(process.env.AGENTVIEW_ASKPASS_SOCK);
 let reply = "";
 socket.on("connect", () => {
-  socket.write(JSON.stringify({ host: process.env.AGENTVIEW_ASKPASS_HOST || "", prompt: process.argv[2] || "" }) + "\\n");
+  socket.write(JSON.stringify({ host: process.env.AGENTVIEW_ASKPASS_HOST || "", window: process.env.AGENTVIEW_ASKPASS_WINDOW || "", prompt: process.argv[2] || "" }) + "\\n");
 });
 socket.setEncoding("utf8");
 socket.on("data", (chunk) => { reply += chunk; });
@@ -67,7 +71,7 @@ export function startAskpass(onPrompt: PromptHandler): void {
       request += chunk;
       const newline = request.indexOf("\n");
       if (newline === -1) return;
-      let parsed: { host?: string; prompt?: string } = {};
+      let parsed: { host?: string; window?: string; prompt?: string } = {};
       try {
         parsed = JSON.parse(request.slice(0, newline)) as typeof parsed;
       } catch {
@@ -78,13 +82,17 @@ export function startAskpass(onPrompt: PromptHandler): void {
         host: parsed.host ?? "",
         message: parsed.prompt ?? "",
       };
-      const answer = handler ? handler(prompt) : Promise.resolve(null);
+      const windowId = parsed.window ? Number(parsed.window) : null;
+      const answer = handler ? handler(prompt, windowId) : Promise.resolve(null);
       answer
         .catch(() => null)
         .then((value) => connection.end(JSON.stringify({ value })));
     });
     connection.on("error", () => {});
   });
+  // Without the bridge ssh still works for key-agent logins; askpassEnv then
+  // tells it never to prompt. A listen failure must not take the app down.
+  server.on("error", () => stopAskpass());
   server.listen(socket);
 }
 
@@ -96,7 +104,7 @@ export function stopAskpass(): void {
 }
 
 /** Environment that routes ssh's prompts for `host` through the bridge. */
-export function askpassEnv(host: string): Record<string, string> {
+export function askpassEnv(host: string, windowId: number | null): Record<string, string> {
   if (!paths) return { SSH_ASKPASS_REQUIRE: "never" };
   return {
     SSH_ASKPASS: paths.script,
@@ -106,5 +114,6 @@ export function askpassEnv(host: string): Record<string, string> {
     AGENTVIEW_ASKPASS_SOCK: paths.socket,
     AGENTVIEW_ASKPASS_NODE: process.execPath,
     AGENTVIEW_ASKPASS_HOST: host,
+    AGENTVIEW_ASKPASS_WINDOW: windowId === null ? "" : String(windowId),
   };
 }

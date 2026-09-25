@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { userInfo } from "node:os";
 
 import { READ_FILE_MAX_BYTES, type RemoteInfo } from "../../shared/ipc";
+import { MAX_DEPTH, SKIP_DIRS } from "../tree";
 import { askpassEnv } from "./askpass";
 
 /**
@@ -14,19 +15,6 @@ import { askpassEnv } from "./askpass";
  * connection is shared through ControlMaster, so reconnecting after the loop
  * dies (or a second window) skips authentication while the master is alive.
  */
-
-/** Directories the tree walk skips; mirrors SKIP_DIRS in ../tree.ts. */
-export const REMOTE_SKIP_DIRS = [
-  "node_modules",
-  ".git",
-  "dist",
-  "out",
-  ".turbo",
-  ".next",
-];
-
-/** How deep below the project root the tree walk goes; mirrors ../tree.ts. */
-export const REMOTE_MAX_DEPTH = 6;
 
 /** Cached reads stay valid this long, so clicking around re-uses them. */
 const CACHE_TTL_MS = 5_000;
@@ -65,8 +53,8 @@ while IFS= read -r line; do
     tree)
       if [ -d "$p" ]; then
         printf 'ok\\t'
-        find "$p" -mindepth 1 -maxdepth ${REMOTE_MAX_DEPTH} \\
-          \\( -type d \\( ${REMOTE_SKIP_DIRS.map((name) => `-name '${name}'`).join(" -o ")} \\) -prune \\) \\
+        find "$p" -mindepth 1 -maxdepth ${MAX_DEPTH} \\
+          \\( -type d \\( ${[...SKIP_DIRS].map((name) => `-name '${name}'`).join(" -o ")} \\) -prune \\) \\
           -o \\( -type d -exec printf 'd\\t%s\\n' {} + \\) \\
           -o \\( -type f -exec printf 'f\\t%s\\n' {} + \\) 2>/dev/null | b64
         printf '\\n'
@@ -135,15 +123,26 @@ export class RemoteHost {
   private ready: Promise<RemoteInfo> | null = null;
   private info: RemoteInfo | null = null;
   private queue: Pending[] = [];
-  private buffer = "";
-  private cache = new Map<string, { at: number; value: Promise<string[] | null> }>();
+  /** Pieces of the stdout line still waiting for its newline. */
+  private partial: string[] = [];
+  private cache = new Map<string, Promise<string[] | null>>();
+  /** Window whose request (re)starts the connection; ssh prompts go to it. */
+  private requester: number | null = null;
 
   constructor(host: string) {
+    // ssh reads a leading "-" as an option (-oProxyCommand=… runs a command).
+    if (!host || host.startsWith("-") || /\s/.test(host)) {
+      throw new Error(`Not an SSH host: ${host}`);
+    }
     this.host = host;
   }
 
-  /** Opens the read loop (authenticating if needed) and returns the remote's home and OS. */
-  connect(): Promise<RemoteInfo> {
+  /**
+   * Opens the read loop (authenticating if needed) and returns the remote's
+   * home and OS. `windowId` is the window to ask if ssh needs a password.
+   */
+  connect(windowId?: number): Promise<RemoteInfo> {
+    if (windowId !== undefined) this.requester = windowId;
     if (!this.ready) this.ready = this.start();
     return this.ready;
   }
@@ -151,11 +150,11 @@ export class RemoteHost {
   private start(): Promise<RemoteInfo> {
     return new Promise<RemoteInfo>((resolve, reject) => {
       const child = spawn("ssh", [...sshArgs(this.host), remoteCommand()], {
-        env: { ...process.env, ...askpassEnv(this.host) },
+        env: { ...process.env, ...askpassEnv(this.host, this.requester) },
         stdio: ["pipe", "pipe", "pipe"],
       });
       this.child = child;
-      this.buffer = "";
+      this.partial = [];
       let stderr = "";
       let started = false;
 
@@ -165,27 +164,36 @@ export class RemoteHost {
       });
 
       child.stdout.setEncoding("utf8");
-      child.stdout.on("data", (chunk: string) => {
-        this.buffer += chunk;
-        let newline: number;
-        while ((newline = this.buffer.indexOf("\n")) !== -1) {
-          const line = this.buffer.slice(0, newline);
-          this.buffer = this.buffer.slice(newline + 1);
-          if (!started) {
-            // Login banners or rc-file noise can precede the handshake.
-            if (!line.startsWith("ready\t")) continue;
-            const [, homeDir = "", uname = ""] = line.split("\t");
-            started = true;
-            this.info = {
-              host: this.host,
-              homeDir,
-              platform: platformFromUname(uname),
-            };
-            resolve(this.info);
-            continue;
-          }
-          this.answer(line);
+      const onLine = (line: string) => {
+        if (!started) {
+          // Login banners or rc-file noise can precede the handshake.
+          if (!line.startsWith("ready\t")) return;
+          const [, homeDir = "", uname = ""] = line.split("\t");
+          started = true;
+          this.info = {
+            host: this.host,
+            homeDir,
+            platform: platformFromUname(uname),
+          };
+          resolve(this.info);
+          return;
         }
+        this.answer(line);
+      };
+
+      // A tree or file response is one line that can span many MB; collect its
+      // chunks and join once, instead of rescanning a growing string per chunk.
+      child.stdout.on("data", (chunk: string) => {
+        let start = 0;
+        let newline: number;
+        while ((newline = chunk.indexOf("\n", start)) !== -1) {
+          this.partial.push(chunk.slice(start, newline));
+          const line = this.partial.join("");
+          this.partial = [];
+          start = newline + 1;
+          onLine(line);
+        }
+        if (start < chunk.length) this.partial.push(chunk.slice(start));
       });
 
       const fail = (message: string) => {
@@ -221,23 +229,34 @@ export class RemoteHost {
     else pending.reject(new Error(fields.join(" ") || "Remote read failed"));
   }
 
-  /** One request to the read loop; null when the path is missing or unreadable. */
-  async request(op: RemoteOp, path: string, cached = true): Promise<string[] | null> {
+  /**
+   * One request to the read loop; null when the path is missing or unreadable.
+   * `windowId` is the window asking, in case the request has to reconnect.
+   */
+  async request(
+    op: RemoteOp,
+    path: string,
+    { cached = true, windowId }: { cached?: boolean; windowId?: number } = {},
+  ): Promise<string[] | null> {
     if (path.includes("\n")) return null;
     const key = `${op}\t${path}`;
     const hit = cached ? this.cache.get(key) : undefined;
-    if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.value;
+    if (hit) return hit;
 
-    const value = this.send(op, path);
+    const value = this.send(op, path, windowId);
     if (cached) {
-      this.cache.set(key, { at: Date.now(), value });
-      value.catch(() => this.cache.delete(key));
+      this.cache.set(key, value);
+      const drop = () => {
+        if (this.cache.get(key) === value) this.cache.delete(key);
+      };
+      setTimeout(drop, CACHE_TTL_MS).unref();
+      value.catch(drop);
     }
     return value;
   }
 
-  private async send(op: RemoteOp, path: string): Promise<string[] | null> {
-    await this.connect();
+  private async send(op: RemoteOp, path: string, windowId?: number): Promise<string[] | null> {
+    await this.connect(windowId);
     const child = this.child;
     if (!child) throw new Error(`Not connected to ${this.host}`);
     return new Promise<string[] | null>((resolve, reject) => {

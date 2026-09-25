@@ -10,11 +10,11 @@ import {
 import {
   decode,
   parseEntries,
-  REMOTE_MAX_DEPTH,
   RemoteHost,
   type RemoteInfo,
+  type RemoteOp,
 } from "./ssh/session";
-import { buildTree, listTree } from "./tree";
+import { buildTree, listTree, MAX_DEPTH } from "./tree";
 
 /** Where a window's project lives: this machine or one SSH host. */
 export interface Backend {
@@ -50,14 +50,17 @@ export const localBackend: Backend = {
   },
 };
 
-function remoteFileSystem(remote: RemoteHost): FileSystemReader {
+/** A read-loop request made on behalf of one window, so ssh prompts reach it. */
+type Request = (op: RemoteOp, path: string, cached?: boolean) => Promise<string[] | null>;
+
+function remoteFileSystem(request: Request): FileSystemReader {
   return {
     async readFile(path) {
-      const fields = await remote.request("read", path);
+      const fields = await request("read", path);
       return fields ? decode(fields[0]) : null;
     },
     async readDir(path) {
-      const fields = await remote.request("list", path);
+      const fields = await request("list", path);
       if (!fields) return null;
       return parseEntries(fields[0]).map((entry) => ({
         name: entry.path.slice(entry.path.lastIndexOf("/") + 1),
@@ -65,25 +68,27 @@ function remoteFileSystem(remote: RemoteHost): FileSystemReader {
       }));
     },
     async fileSize(path) {
-      const fields = await remote.request("size", path);
+      const fields = await request("size", path);
       return fields ? Number(fields[0]) : null;
     },
   };
 }
 
-function remoteBackend(remote: RemoteHost, info: RemoteInfo): Backend {
+function remoteBackend(remote: RemoteHost, info: RemoteInfo, windowId: number): Backend {
+  const request: Request = (op, path, cached = true) =>
+    remote.request(op, path, { cached, windowId });
   return {
     host: remote.host,
     homeDir: info.homeDir,
     platform: info.platform,
-    fs: remoteFileSystem(remote),
+    fs: remoteFileSystem(request),
     async listTree(folder) {
-      const fields = await remote.request("tree", folder, false);
+      const fields = await request("tree", folder, false);
       if (!fields) throw new Error(`Not a folder on ${remote.host}: ${folder}`);
-      return buildTree(folder, parseEntries(fields[0]), REMOTE_MAX_DEPTH);
+      return buildTree(folder, parseEntries(fields[0]), MAX_DEPTH);
     },
     async readFile(path) {
-      const fields = await remote.request("head", path);
+      const fields = await request("head", path);
       if (!fields) throw new Error(`Not a file on ${remote.host}: ${path}`);
       const bytes = Number(fields[0]);
       return {
@@ -119,10 +124,10 @@ export function resetToLocal(windowId: number): void {
 }
 
 /** Connects to `host`, authenticating through the askpass bridge if needed. */
-export async function connectRemote(host: string): Promise<RemoteInfo> {
+export async function connectRemote(host: string, windowId: number): Promise<RemoteInfo> {
   const remote = remoteHost(host);
   try {
-    return await remote.connect();
+    return await remote.connect(windowId);
   } catch (error) {
     hosts.delete(host);
     throw error;
@@ -139,7 +144,7 @@ export async function openRemote(
   folder: string,
 ): Promise<RemoteInfo & { folder: string }> {
   const remote = remoteHost(host);
-  const info = await remote.connect();
+  const info = await remote.connect(windowId);
 
   let path = folder.trim();
   if (path === "~") path = info.homeDir;
@@ -147,10 +152,10 @@ export async function openRemote(
   if (!path.startsWith("/")) throw new Error("Use an absolute path or one starting with ~/");
   if (path.length > 1) path = path.replace(/\/+$/, "");
 
-  if (!(await remote.request("isdir", path, false))) {
+  if (!(await remote.request("isdir", path, { cached: false, windowId }))) {
     throw new Error(`No folder at ${path} on ${host}`);
   }
-  windows.set(windowId, remoteBackend(remote, info));
+  windows.set(windowId, remoteBackend(remote, info, windowId));
   return { ...info, folder: path };
 }
 

@@ -3,16 +3,10 @@ import { Button } from "@agentview/ui";
 
 import type { RemoteInfo } from "../../../shared/ipc";
 import { errorMessage } from "../lib/errors";
+import { displayPath } from "../lib/paths";
 import type { RecentProject } from "../lib/recents";
 import { ServerIcon } from "./Icons";
 import { inputClass, Modal } from "./Modal";
-
-/** `path` with the remote home shown as `~`. */
-function tildePath(path: string, home: string): string {
-  return home && (path === home || path.startsWith(`${home}/`))
-    ? `~${path.slice(home.length)}`
-    : path;
-}
 
 interface RemoteDialogProps {
   /** Recent projects; the remote ones are offered first and prefill the folder. */
@@ -35,7 +29,7 @@ export function RemoteDialog({
   const api = window.agentview;
   const [step, setStep] = useState<Step>({ kind: "host" });
   const [hostInput, setHostInput] = useState("");
-  const [pathInput, setPathInput] = useState("~");
+  const [pathInput, setPathInput] = useState("");
   const [configHosts, setConfigHosts] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
@@ -63,7 +57,8 @@ export function RemoteDialog({
     try {
       const info = await api.connectRemote(target);
       const remembered = recent.find((r) => r.host === target);
-      setPathInput(remembered ? tildePath(remembered.path, info.homeDir) : "~");
+      // No "~" default: listing the whole remote home is slow and rarely wanted.
+      setPathInput(remembered ? displayPath(remembered.path, null, info.homeDir) : "");
       setStep({ kind: "path", info });
     } catch (cause) {
       setError(errorMessage(cause));

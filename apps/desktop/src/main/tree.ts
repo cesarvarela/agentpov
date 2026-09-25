@@ -4,7 +4,7 @@ import { basename, join } from "node:path";
 import type { FileMark, FileNode } from "../shared/ipc";
 
 /** Directories that never carry agent context and only add noise. */
-const SKIP_DIRS = new Set([
+export const SKIP_DIRS = new Set([
   "node_modules",
   ".git",
   "dist",
@@ -14,7 +14,7 @@ const SKIP_DIRS = new Set([
 ]);
 
 /** How deep below the project root we walk. */
-const MAX_DEPTH = 6;
+export const MAX_DEPTH = 6;
 
 /** Marks a node carries purely from its name. */
 export function marksForName(name: string, kind: "file" | "dir"): FileMark[] {
