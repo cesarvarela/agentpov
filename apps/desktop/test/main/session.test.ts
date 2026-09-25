@@ -250,12 +250,13 @@ describe("RemoteHost", () => {
 
     it("fails pending requests when the connection drops, then reconnects", async () => {
       await remote.connect();
-      const child = (remote as unknown as { child: { kill(): void } }).child;
+      const child = (remote as unknown as { child: { kill(signal: NodeJS.Signals): void } }).child;
       await writeFile(join(root, "after.md"), "back");
 
-      // Sent after the process died but before ssh's exit is noticed.
-      child.kill();
+      // Paused, the loop can't answer; the request is queued when it dies.
+      child.kill("SIGSTOP");
       const stuck = remote.request("read", join(root, "after.md"), { cached: false });
+      child.kill("SIGKILL");
 
       await expect(stuck).rejects.toThrow();
       expect(decode((await remote.request("read", join(root, "after.md")))?.[0])).toBe("back");
