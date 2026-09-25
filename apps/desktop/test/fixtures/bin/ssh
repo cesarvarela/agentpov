@@ -11,4 +11,6 @@ if [ -n "$STUB_FAIL" ]; then
   exit 255
 fi
 [ -n "$STUB_BANNER" ] && echo "$STUB_BANNER"
-exec /bin/sh -c "$last"
+# "exec" inside too: dash would otherwise fork the command, leaving this pid a
+# wrapper, and signals sent to "ssh" would miss the read loop.
+exec /bin/sh -c "exec $last"
