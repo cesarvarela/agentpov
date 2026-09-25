@@ -80,7 +80,7 @@ export function findImports(content: string): ImportReference[] {
  * unclosed backtick run is literal text, as in CommonMark.
  */
 function blankCodeSpans(line: string): string {
-  return line.replace(/(`+)(?!`)([\s\S]*?[^`])\1(?!`)/g, (span) => " ".repeat(span.length));
+  return line.replace(/(?<!`)(`+)(?!`)([\s\S]*?[^`])\1(?!`)/g, (span) => " ".repeat(span.length));
 }
 
 function trimTrailingPunctuation(token: string): string {

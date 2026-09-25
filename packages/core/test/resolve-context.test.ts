@@ -211,8 +211,12 @@ describe("resolveContext", () => {
           "Run `pnpm -F @acme/core build` after changes.",
           "Also ``see @docs/not-either.md`` here, then @docs/style.md too.",
           "An unclosed ` backtick leaves @docs/after-tick.md as an import.",
+          // The `` run has no partner; x's tick pairs with the next one, so the
+          // @path sits between spans, not inside one.
+          "A lone ``x` run, then ` @docs/between.md ` stays an import.",
         ].join("\n"),
         [`${FOLDER}/docs/style.md`]: "style",
+        [`${FOLDER}/docs/between.md`]: "between",
         [`${FOLDER}/docs/after-tick.md`]: "tick",
       });
 
@@ -220,6 +224,7 @@ describe("resolveContext", () => {
         `${FOLDER}/CLAUDE.md`,
         `${FOLDER}/docs/style.md`,
         `${FOLDER}/docs/after-tick.md`,
+        `${FOLDER}/docs/between.md`,
       ]);
       expect(result.diagnostics).toEqual([]);
     });
