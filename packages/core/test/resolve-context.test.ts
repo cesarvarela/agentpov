@@ -205,6 +205,25 @@ describe("resolveContext", () => {
       expect(result.diagnostics).toEqual([]);
     });
 
+    it("ignores @paths inside inline code spans but not beside them", async () => {
+      const result = await run({
+        [`${FOLDER}/CLAUDE.md`]: [
+          "Run `pnpm -F @acme/core build` after changes.",
+          "Also ``see @docs/not-either.md`` here, then @docs/style.md too.",
+          "An unclosed ` backtick leaves @docs/after-tick.md as an import.",
+        ].join("\n"),
+        [`${FOLDER}/docs/style.md`]: "style",
+        [`${FOLDER}/docs/after-tick.md`]: "tick",
+      });
+
+      expect(paths(result.memory)).toEqual([
+        `${FOLDER}/CLAUDE.md`,
+        `${FOLDER}/docs/style.md`,
+        `${FOLDER}/docs/after-tick.md`,
+      ]);
+      expect(result.diagnostics).toEqual([]);
+    });
+
     it("reports a missing import as a diagnostic and skips it", async () => {
       const result = await run({
         [`${FOLDER}/CLAUDE.md`]: "Read @docs/missing.md first.",

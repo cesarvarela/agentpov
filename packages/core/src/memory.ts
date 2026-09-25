@@ -63,14 +63,24 @@ export function findImports(content: string): ImportReference[] {
     }
     if (inFence) continue;
     const pattern = /(?:^|\s)@(\S+)/g;
+    const prose = blankCodeSpans(line);
     let match: RegExpExecArray | null;
-    while ((match = pattern.exec(line)) !== null) {
+    while ((match = pattern.exec(prose)) !== null) {
       const token = trimTrailingPunctuation(match[1]!);
       if (!looksLikePath(token)) continue;
       results.push({ raw: token, line: index + 1 });
     }
   }
   return results;
+}
+
+/**
+ * `line` with inline code spans (`` `…` ``, any backtick run length) replaced
+ * by spaces, since Claude Code does not follow `@path` inside code. An
+ * unclosed backtick run is literal text, as in CommonMark.
+ */
+function blankCodeSpans(line: string): string {
+  return line.replace(/(`+)(?!`)([\s\S]*?[^`])\1(?!`)/g, (span) => " ".repeat(span.length));
 }
 
 function trimTrailingPunctuation(token: string): string {
