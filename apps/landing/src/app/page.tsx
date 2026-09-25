@@ -7,6 +7,8 @@ import {
   CardTitle,
 } from "@agentpov/ui";
 
+import { Workflow } from "./workflow";
+
 const REPO_URL = "https://github.com/cesarvarela/agentpov";
 // Stable asset name (see apps/desktop/electron-builder.yml), so this always
 // resolves to the newest release.
@@ -65,6 +67,8 @@ export default function Home() {
           ~/projects/acme/shop-api → src/api/payments.ts
         </p>
       </section>
+
+      <Workflow />
 
       <section className="grid gap-4 sm:grid-cols-3">
         {features.map((feature) => (
