@@ -146,7 +146,7 @@ function FrontmatterTable({ fields }: { fields: [string, FieldValue][] }) {
  * ------------------------------------------------------------------ */
 
 /** Marks a link the pane handles itself rather than one the document has. */
-const IMPORT_SCHEME = "agentview-import:";
+const IMPORT_SCHEME = "agentpov-import:";
 
 /** Mirrors `looksLikePath` / `trimTrailingPunctuation` in core's memory.ts. */
 function importToken(raw: string): string | null {

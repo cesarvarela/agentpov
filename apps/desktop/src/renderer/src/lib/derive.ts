@@ -5,7 +5,7 @@ import type {
   PermissionDecision,
   PermissionRule,
   ResolvedContext,
-} from "@agentview/core";
+} from "@agentpov/core";
 
 import { displayPath, projectPath, relativeTo } from "./paths";
 

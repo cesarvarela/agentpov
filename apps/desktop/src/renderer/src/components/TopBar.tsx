@@ -79,7 +79,7 @@ export function TopBar({
               className={
                 active
                   // Orange marks the agent whose context this is (Claude
-                  // Code); amber stays agentview's own accent.
+                  // Code); amber stays agentpov's own accent.
                   ? "bg-om-raised text-om-orange flex h-6 items-center rounded-[4px] px-2.5 text-xs font-medium"
                   : "text-om-muted flex h-6 cursor-default items-center rounded-[4px] px-2.5 text-xs opacity-70"
               }

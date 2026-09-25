@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Badge } from "@agentview/ui";
+import { Badge } from "@agentpov/ui";
 
 import { JsonTree } from "./JsonViewer";
 import {

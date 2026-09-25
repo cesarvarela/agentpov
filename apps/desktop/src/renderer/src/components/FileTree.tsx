@@ -1,4 +1,4 @@
-import { Badge, ScrollArea } from "@agentview/ui";
+import { Badge, ScrollArea } from "@agentpov/ui";
 
 import type { FileNode, TargetKind } from "../../../shared/ipc";
 import { basename, countNodes } from "../lib/paths";
@@ -10,7 +10,7 @@ import {
   FolderIcon,
 } from "./Icons";
 
-// Colour semantics, all driven by the `--om-*` tokens in @agentview/ui: amber
+// Colour semantics, all driven by the `--om-*` tokens in @agentpov/ui: amber
 // is the app's own accent (selection, focus), orange is the Claude Code agent's
 // identity, and anything without a meaning of its own stays muted — MCP
 // included. A second agent gets its own token rather than reusing amber.

@@ -1,4 +1,4 @@
-# agentview — UI mocks
+# agentpov — UI mocks
 
 Static hi-fi mockups for a desktop app (Electron + Vite) that shows how a coding
 agent (Claude Code first) sees a folder: which CLAUDE.md files, memory, settings,
@@ -33,7 +33,7 @@ Story frames are 1600×620; screen frames are 1440×900.
   styles; open it in any browser. The `./support.js` script tag is intentionally
   unresolved and harmless.
 - `canvas.json` is the layout for the shared canvas: https://claude.ai/artifact/NU4Tk6ieNM8j5TNimcNtHF
-- `../agentview-mocks.html` is the full editable canvas bundle (large; open in a browser).
+- `../agentpov-mocks.html` is the full editable canvas bundle (large; open in a browser).
 - Design tokens: bg `#101216`, panel `#171a20`, raised `#1e222a`, border `#2a2f38`,
   text `#e6e8ec`, muted `#8b919c`. One meaning per colour: amber `#e8b04c` is
   the app accent only (logo, app name, selection, focus), orange `#d97757` is

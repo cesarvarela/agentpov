@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button } from "@agentview/ui";
+import { Button } from "@agentpov/ui";
 
 import type { SshPrompt } from "../../../shared/ipc";
 import { inputClass, Modal } from "./Modal";
@@ -14,7 +14,7 @@ function isHostKeyQuestion(message: string): boolean {
  * code, unknown host key). Prompts queue up; the oldest is shown first.
  */
 export function SshPromptDialog() {
-  const api = window.agentview;
+  const api = window.agentpov;
   const [queue, setQueue] = useState<SshPrompt[]>([]);
   const [value, setValue] = useState("");
 

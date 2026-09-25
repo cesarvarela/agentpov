@@ -1,5 +1,5 @@
-/* Shared agentview theme: Tailwind v4 + design tokens + shadcn semantic tokens. */
-@import "@agentview/ui/styles.css";
+/* Shared agentpov theme: Tailwind v4 + design tokens + shadcn semantic tokens. */
+@import "@agentpov/ui/styles.css";
 
 /* Tailwind must scan this renderer and the shared UI package for class names.
    Paths are relative to this file. */

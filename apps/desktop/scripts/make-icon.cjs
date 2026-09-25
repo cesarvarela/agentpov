@@ -1,6 +1,6 @@
 // Renders build/icon.svg to build/icon.icns (macOS only: uses sips + iconutil)
 // and build/icon.png, which the main process sets as the dock icon in dev.
-// Run with `pnpm -F @agentview/desktop make-icon`; it launches Electron headless
+// Run with `pnpm -F @agentpov/desktop make-icon`; it launches Electron headless
 // so no extra image tooling is needed.
 const { execFileSync } = require("node:child_process");
 const { mkdtempSync, readFileSync, rmSync, writeFileSync } = require("node:fs");
@@ -32,7 +32,7 @@ app.whenReady().then(async () => {
   const image = await win.webContents.capturePage({ x: 0, y: 0, width: SIZE, height: SIZE });
   const png = image.resize({ width: SIZE, height: SIZE, quality: "best" }).toPNG();
 
-  const work = mkdtempSync(join(tmpdir(), "agentview-icon-"));
+  const work = mkdtempSync(join(tmpdir(), "agentpov-icon-"));
   const master = join(work, "icon-1024.png");
   writeFileSync(master, png);
   writeFileSync(join(buildDir, "icon.png"), png);

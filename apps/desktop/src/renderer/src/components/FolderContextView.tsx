@@ -1,11 +1,11 @@
-import { Badge, ScrollArea } from "@agentview/ui";
+import { Badge, ScrollArea } from "@agentpov/ui";
 import type {
   ConfigLayer,
   MemoryEntry,
   PermissionRule,
   ResolvedContext,
   SkillEntry,
-} from "@agentview/core";
+} from "@agentpov/core";
 
 import type { FolderMemorySplit } from "../lib/derive";
 import {

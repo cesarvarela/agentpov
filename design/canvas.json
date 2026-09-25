@@ -156,7 +156,7 @@
       "y": -160,
       "w": 520,
       "page": "page-1",
-      "text": "agentview — how an agent sees a folder. Claude Code first; agent switcher reserved for Codex / Cursor / Gemini CLI. Selected file across screens: src/api/payments.ts"
+      "text": "agentpov — how an agent sees a folder. Claude Code first; agent switcher reserved for Codex / Cursor / Gemini CLI. Selected file across screens: src/api/payments.ts"
     },
     {
       "id": "workflows-note",

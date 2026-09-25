@@ -32,13 +32,13 @@ function persist(key: string, value: string) {
 
 /**
  * Width / collapsed state for one resizable pane, persisted in localStorage
- * under `agentview.<key>.width` and `agentview.<key>.collapsed`.
+ * under `agentpov.<key>.width` and `agentpov.<key>.collapsed`.
  */
 export function usePanePersistence(key: string, defaults: PaneDefaults): PaneState {
   const { defaultWidth, minWidth, maxWidth, defaultCollapsed = false } = defaults;
 
-  const widthKey = `agentview.${key}.width`;
-  const collapsedKey = `agentview.${key}.collapsed`;
+  const widthKey = `agentpov.${key}.width`;
+  const collapsedKey = `agentpov.${key}.collapsed`;
 
   const clamp = useCallback(
     (width: number) => Math.min(maxWidth, Math.max(minWidth, width)),

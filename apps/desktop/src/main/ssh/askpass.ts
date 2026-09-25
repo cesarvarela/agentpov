@@ -20,10 +20,10 @@ export type PromptHandler = (
 
 const HELPER_JS = `
 const net = require("node:net");
-const socket = net.connect(process.env.AGENTVIEW_ASKPASS_SOCK);
+const socket = net.connect(process.env.AGENTPOV_ASKPASS_SOCK);
 let reply = "";
 socket.on("connect", () => {
-  socket.write(JSON.stringify({ host: process.env.AGENTVIEW_ASKPASS_HOST || "", window: process.env.AGENTVIEW_ASKPASS_WINDOW || "", prompt: process.argv[2] || "" }) + "\\n");
+  socket.write(JSON.stringify({ host: process.env.AGENTPOV_ASKPASS_HOST || "", window: process.env.AGENTPOV_ASKPASS_WINDOW || "", prompt: process.argv[2] || "" }) + "\\n");
 });
 socket.setEncoding("utf8");
 socket.on("data", (chunk) => { reply += chunk; });
@@ -50,7 +50,7 @@ export function startAskpass(onPrompt: PromptHandler): void {
   handler = onPrompt;
   if (server) return;
 
-  const dir = join(tmpdir(), `agentview-askpass-${userInfo().uid}-${process.pid}`);
+  const dir = join(tmpdir(), `agentpov-askpass-${userInfo().uid}-${process.pid}`);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   const helper = join(dir, "askpass.js");
   const script = join(dir, "askpass.sh");
@@ -58,7 +58,7 @@ export function startAskpass(onPrompt: PromptHandler): void {
   writeFileSync(helper, HELPER_JS, { mode: 0o600 });
   writeFileSync(
     script,
-    `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec "$AGENTVIEW_ASKPASS_NODE" "${helper}" "$@"\n`,
+    `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec "$AGENTPOV_ASKPASS_NODE" "${helper}" "$@"\n`,
   );
   chmodSync(script, 0o700);
   rmSync(socket, { force: true });
@@ -110,10 +110,10 @@ export function askpassEnv(host: string, windowId: number | null): Record<string
     SSH_ASKPASS: paths.script,
     SSH_ASKPASS_REQUIRE: "force",
     // Older OpenSSH only consults SSH_ASKPASS when DISPLAY is set.
-    DISPLAY: process.env["DISPLAY"] ?? "agentview:0",
-    AGENTVIEW_ASKPASS_SOCK: paths.socket,
-    AGENTVIEW_ASKPASS_NODE: process.execPath,
-    AGENTVIEW_ASKPASS_HOST: host,
-    AGENTVIEW_ASKPASS_WINDOW: windowId === null ? "" : String(windowId),
+    DISPLAY: process.env["DISPLAY"] ?? "agentpov:0",
+    AGENTPOV_ASKPASS_SOCK: paths.socket,
+    AGENTPOV_ASKPASS_NODE: process.execPath,
+    AGENTPOV_ASKPASS_HOST: host,
+    AGENTPOV_ASKPASS_WINDOW: windowId === null ? "" : String(windowId),
   };
 }

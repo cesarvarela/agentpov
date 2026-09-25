@@ -26,7 +26,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # typecheck depends on ^build in turbo, so this also builds @agentview/core.
+      # typecheck depends on ^build in turbo, so this also builds @agentpov/core.
       - run: pnpm typecheck
 
-      - run: pnpm -F @agentview/core test
+      - run: pnpm -F @agentpov/core test

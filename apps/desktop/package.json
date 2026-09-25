@@ -1,12 +1,12 @@
 {
-  "name": "@agentview/desktop",
-  "productName": "agentview",
+  "name": "@agentpov/desktop",
+  "productName": "agentpov",
   "version": "0.0.0",
   "private": true,
-  "description": "agentview desktop app (Electron + Vite + React)",
+  "description": "agentpov desktop app (Electron + Vite + React)",
   "author": "Cesar Varela",
   "license": "MIT",
-  "homepage": "https://github.com/cesarvarela/agentview",
+  "homepage": "https://github.com/cesarvarela/agentpov",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -16,11 +16,11 @@
     "dist:unsigned": "electron-vite build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --publish never -c.mac.identity=null -c.mac.notarize=false",
     "make-icon": "electron scripts/make-icon.cjs",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
-    "lint": "echo \"(no linter configured for @agentview/desktop)\""
+    "lint": "echo \"(no linter configured for @agentpov/desktop)\""
   },
   "devDependencies": {
-    "@agentview/core": "workspace:*",
-    "@agentview/ui": "workspace:*",
+    "@agentpov/core": "workspace:*",
+    "@agentpov/ui": "workspace:*",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.2",

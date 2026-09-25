@@ -70,7 +70,7 @@ export type { RemoteInfo };
 
 /** Socket directory; kept short because ControlPath is capped near 104 bytes. */
 function controlDir(): string {
-  const dir = `/tmp/agentview-${userInfo().uid}`;
+  const dir = `/tmp/agentpov-${userInfo().uid}`;
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   return dir;
 }

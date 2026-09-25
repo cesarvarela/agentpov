@@ -7,7 +7,7 @@ export interface RecentProject {
   homeDir?: string;
 }
 
-const KEY = "agentview.recent";
+const KEY = "agentpov.recent";
 const MAX = 10;
 
 function sameProject(a: RecentProject, b: RecentProject): boolean {

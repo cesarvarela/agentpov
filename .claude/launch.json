@@ -4,14 +4,14 @@
     {
       "name": "landing",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@agentview/landing", "dev"],
+      "runtimeArgs": ["--filter", "@agentpov/landing", "dev"],
       "port": 4000,
       "autoPort": false
     },
     {
       "name": "landing-pages",
       "runtimeExecutable": "sh",
-      "runtimeArgs": ["-c", "mkdir -p /tmp/agentview-pages && ln -sfn \"$PWD/apps/landing/out\" /tmp/agentview-pages/agentview && python3 -m http.server 4003 -d /tmp/agentview-pages"],
+      "runtimeArgs": ["-c", "mkdir -p /tmp/agentpov-pages && ln -sfn \"$PWD/apps/landing/out\" /tmp/agentpov-pages/agentpov && python3 -m http.server 4003 -d /tmp/agentpov-pages"],
       "port": 4003,
       "autoPort": false
     }

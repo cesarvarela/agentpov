@@ -1,6 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { createNodeFileSystem, type FileSystemReader } from "@agentview/core";
+import { createNodeFileSystem, type FileSystemReader } from "@agentpov/core";
 
 import {
   READ_FILE_MAX_BYTES,

@@ -1,4 +1,4 @@
-# agentview
+# agentpov
 
 A desktop app that shows **how a coding agent sees a folder**.
 
@@ -12,18 +12,18 @@ Claude Code first; the model is deliberately agent-agnostic so other agents can
 follow.
 
 Design mocks live in [`design/`](./design) (see `design/README.md`);
-`agentview-mocks.html` is the full editable canvas bundle.
+`agentpov-mocks.html` is the full editable canvas bundle.
 
 ## Layout
 
 ```
-agentview/
+agentpov/
   apps/
-    desktop/     @agentview/desktop  — Electron + Vite + React 19 + Tailwind v4
-    landing/     @agentview/landing  — Next.js App Router marketing site
+    desktop/     @agentpov/desktop  — Electron + Vite + React 19 + Tailwind v4
+    landing/     @agentpov/landing  — Next.js App Router marketing site
   packages/
-    ui/          @agentview/ui       — shared shadcn components + design tokens
-    core/        @agentview/core     — config resolution engine (stub today)
+    ui/          @agentpov/ui       — shared shadcn components + design tokens
+    core/        @agentpov/core     — config resolution engine (stub today)
   design/        static hi-fi mockups
 ```
 
@@ -52,32 +52,32 @@ pnpm test
 ### Run one app
 
 ```bash
-pnpm --filter @agentview/desktop dev     # Electron window + Vite HMR
-pnpm --filter @agentview/landing dev     # http://localhost:4000
+pnpm --filter @agentpov/desktop dev     # Electron window + Vite HMR
+pnpm --filter @agentpov/landing dev     # http://localhost:4000
 ```
 
 ### Packages
 
 ```bash
-pnpm --filter @agentview/core test       # vitest
-pnpm --filter @agentview/ui typecheck
+pnpm --filter @agentpov/core test       # vitest
+pnpm --filter @agentpov/ui typecheck
 ```
 
 ## Packaging the desktop app
 
 ```bash
-pnpm --filter @agentview/core build             # desktop bundles core from dist/
-pnpm --filter @agentview/desktop dist:unsigned  # no signing, no notarization
-open apps/desktop/release/agentview-mac.dmg
+pnpm --filter @agentpov/core build             # desktop bundles core from dist/
+pnpm --filter @agentpov/desktop dist:unsigned  # no signing, no notarization
+open apps/desktop/release/agentpov-mac.dmg
 ```
 
-This produces a universal (Apple Silicon + Intel) `agentview-mac.dmg` in
+This produces a universal (Apple Silicon + Intel) `agentpov-mac.dmg` in
 `apps/desktop/release/`. Unsigned builds run on the machine that built them;
 anywhere else Gatekeeper blocks them. `dist` is the signed variant and is
 what CI runs.
 
 The app icon (`apps/desktop/build/icon.icns`) is a placeholder rendered from
-`build/icon.svg`; regenerate it with `pnpm --filter @agentview/desktop make-icon`.
+`build/icon.svg`; regenerate it with `pnpm --filter @agentpov/desktop make-icon`.
 
 ## Releasing
 
@@ -90,10 +90,10 @@ git push origin v0.1.0
 
 `.github/workflows/release.yml` builds the DMG on `macos-latest`, signs it with
 the Developer ID certificate, notarizes and staples it, and uploads
-`agentview-mac.dmg` to the GitHub Release for that tag. The app version is
+`agentpov-mac.dmg` to the GitHub Release for that tag. The app version is
 taken from the tag (`v0.1.0` → `0.1.0`; a tag with a `-` is published as a
 prerelease). The landing page links to
-`https://github.com/cesarvarela/agentview/releases/latest/download/agentview-mac.dmg`,
+`https://github.com/cesarvarela/agentpov/releases/latest/download/agentpov-mac.dmg`,
 so the asset name must stay version-less. Running the workflow manually on a
 branch builds and signs the same DMG and attaches it to the run instead.
 
@@ -117,8 +117,8 @@ push and pull request to `main`.
 
 `apps/landing` is a static export (`output: "export"`). `.github/workflows/pages.yml`
 builds it and deploys it to GitHub Pages on every push to `main` that touches
-the landing or `packages/ui`, served at `https://cesarvarela.github.io/agentview/`.
-The workflow passes the Pages base path (`/agentview`) as `PAGES_BASE_PATH`;
+the landing or `packages/ui`, served at `https://cesarvarela.github.io/agentpov/`.
+The workflow passes the Pages base path (`/agentpov`) as `PAGES_BASE_PATH`;
 with a custom domain it is empty and nothing else changes.
 
 ## Notes
@@ -129,7 +129,7 @@ with a custom domain it is empty and nothing else changes.
   (`apps/desktop/electron-builder.yml`). Every library is bundled into `out/`,
   so the desktop package keeps them all in `devDependencies` and the packaged
   app ships no `node_modules`.
-- `@agentview/ui` ships TypeScript source; consumers transpile it (Next.js via
+- `@agentpov/ui` ships TypeScript source; consumers transpile it (Next.js via
   `transpilePackages`, the desktop renderer via Vite).
 - Design tokens are defined once as `--om-*` custom properties and mapped onto
   shadcn's semantic tokens (`--background`, `--card`, `--primary` = amber,

@@ -8,9 +8,9 @@ export default defineConfig({
     // externalizeDepsPlugin only externalizes package.json `dependencies`.
     // The desktop package keeps every library in devDependencies so all of it
     // is bundled into out/ and the packaged app ships without node_modules
-    // (see electron-builder.yml). @agentview/core is excluded explicitly as
+    // (see electron-builder.yml). @agentpov/core is excluded explicitly as
     // well: it is pure ESM and must not be require()d from the CJS main bundle.
-    plugins: [externalizeDepsPlugin({ exclude: ["@agentview/core"] })],
+    plugins: [externalizeDepsPlugin({ exclude: ["@agentpov/core"] })],
     build: {
       rollupOptions: {
         input: { index: resolve(__dirname, "src/main/index.ts") },
@@ -33,9 +33,9 @@ export default defineConfig({
       },
     },
     plugins: [react(), tailwindcss()],
-    // AGENTVIEW_PORT lets a second checkout (a worktree) run beside the main one.
+    // AGENTPOV_PORT lets a second checkout (a worktree) run beside the main one.
     server: {
-      port: Number(process.env.AGENTVIEW_PORT ?? 4001),
+      port: Number(process.env.AGENTPOV_PORT ?? 4001),
       strictPort: true,
     },
     build: {

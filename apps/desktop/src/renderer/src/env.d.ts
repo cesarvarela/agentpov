@@ -1,10 +1,10 @@
 /// <reference types="vite/client" />
 
-import type { AgentviewApi } from "../../preload";
+import type { AgentpovApi } from "../../preload";
 
 declare global {
   interface Window {
-    agentview?: AgentviewApi;
+    agentpov?: AgentpovApi;
   }
 }
 

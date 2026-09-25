@@ -5,7 +5,7 @@
    this file (packages/ui/src/styles/globals.css). */
 @source "../";
 
-/* agentview is a dark-first app: the `dark` variant is opt-in via a class, but
+/* agentpov is a dark-first app: the `dark` variant is opt-in via a class, but
    the default token values below are already the dark palette. */
 @custom-variant dark (&:is(.dark, .dark *));
 

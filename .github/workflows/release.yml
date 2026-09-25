@@ -1,6 +1,6 @@
 name: Release
 
-# Push a vX.Y.Z tag to build, sign, notarize and publish agentview-mac.dmg to
+# Push a vX.Y.Z tag to build, sign, notarize and publish agentpov-mac.dmg to
 # the GitHub Release for that tag. A manual run on a branch builds the same
 # DMG and attaches it to the workflow run instead of a release.
 on:
@@ -41,7 +41,7 @@ jobs:
             version="${base}-dev.${GITHUB_RUN_NUMBER}"
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "Building agentview $version"
+          echo "Building agentpov $version"
 
       - name: Check signing secrets
         env:
@@ -90,8 +90,8 @@ jobs:
           security find-identity -v -p codesigning "$keychain"
           echo "CSC_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
 
-      - name: Build @agentview/core
-        run: pnpm -F @agentview/core build
+      - name: Build @agentpov/core
+        run: pnpm -F @agentpov/core build
 
       - name: Build, sign and notarize
         working-directory: apps/desktop
@@ -112,21 +112,21 @@ jobs:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: |
-          xcrun notarytool submit agentview-mac.dmg --wait \
+          xcrun notarytool submit agentpov-mac.dmg --wait \
             --key "$APPLE_API_KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER"
-          xcrun stapler staple agentview-mac.dmg
+          xcrun stapler staple agentpov-mac.dmg
 
       - name: Verify signature and notarization
         working-directory: apps/desktop/release
         run: |
-          app="mac-universal/agentview.app"
+          app="mac-universal/agentpov.app"
           codesign --verify --deep --strict --verbose=2 "$app"
           xcrun stapler validate "$app"
           spctl --assess --type execute --verbose=4 "$app"
-          xcrun stapler validate agentview-mac.dmg
-          spctl --assess --type open --context context:primary-signature --verbose=4 agentview-mac.dmg
-          lipo -archs "$app/Contents/MacOS/agentview"
-          ls -lh agentview-mac.dmg
+          xcrun stapler validate agentpov-mac.dmg
+          spctl --assess --type open --context context:primary-signature --verbose=4 agentpov-mac.dmg
+          lipo -archs "$app/Contents/MacOS/agentpov"
+          ls -lh agentpov-mac.dmg
 
       - name: Remove API key and signing keychain
         if: always()
@@ -138,7 +138,7 @@ jobs:
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v3
         with:
-          files: apps/desktop/release/agentview-mac.dmg
+          files: apps/desktop/release/agentpov-mac.dmg
           fail_on_unmatched_files: true
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
@@ -147,6 +147,6 @@ jobs:
         if: github.ref_type != 'tag'
         uses: actions/upload-artifact@v7
         with:
-          name: agentview-mac-${{ steps.version.outputs.version }}
-          path: apps/desktop/release/agentview-mac.dmg
+          name: agentpov-mac-${{ steps.version.outputs.version }}
+          path: apps/desktop/release/agentpov-mac.dmg
           if-no-files-found: error

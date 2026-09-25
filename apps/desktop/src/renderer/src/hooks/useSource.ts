@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import type { ConfigLayer } from "@agentview/core";
+import type { ConfigLayer } from "@agentpov/core";
 
 /** A file the right-hand source pane is showing, plus what to highlight in it. */
 export interface SourceTarget {

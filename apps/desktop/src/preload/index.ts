@@ -67,6 +67,6 @@ const api = {
   },
 };
 
-export type AgentviewApi = typeof api;
+export type AgentpovApi = typeof api;
 
-contextBridge.exposeInMainWorld("agentview", api);
+contextBridge.exposeInMainWorld("agentpov", api);

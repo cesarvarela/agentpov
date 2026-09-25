@@ -1,6 +1,6 @@
-# @agentview/core
+# @agentpov/core
 
-The resolution engine behind agentview. Given a project folder and a file
+The resolution engine behind agentpov. Given a project folder and a file
 inside it, it answers: **what does a coding agent actually see here?**
 
 This is implemented. `resolveContext(folder, file, options)` is async, reads
@@ -8,7 +8,7 @@ everything through an injected `FileSystemReader`, and returns a fully
 populated `ResolvedContext`. The types in `src/types.ts` are the contract.
 
 ```ts
-import { resolveContext, createNodeFileSystem } from "@agentview/core";
+import { resolveContext, createNodeFileSystem } from "@agentpov/core";
 
 const context = await resolveContext("/projects/acme/shop-api", "src/api/payments.ts", {
   fs: createNodeFileSystem(),
@@ -77,7 +77,7 @@ falling out of a generic merge.
 ## Scripts
 
 ```bash
-pnpm --filter @agentview/core build      # tsc → dist/
-pnpm --filter @agentview/core typecheck
-pnpm --filter @agentview/core test       # vitest
+pnpm --filter @agentpov/core build      # tsc → dist/
+pnpm --filter @agentpov/core typecheck
+pnpm --filter @agentpov/core test       # vitest
 ```

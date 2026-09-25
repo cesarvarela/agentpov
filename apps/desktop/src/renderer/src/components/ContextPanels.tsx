@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Badge } from "@agentview/ui";
+import { Badge } from "@agentpov/ui";
 import type {
   AgentEntry,
   ConfigLayer,
@@ -11,7 +11,7 @@ import type {
   SkillEntry,
   SkillSource,
   TargetKind,
-} from "@agentview/core";
+} from "@agentpov/core";
 
 import { layerLabel } from "../lib/derive";
 import {
@@ -130,7 +130,7 @@ export function LoadingLegend() {
 
 /**
  * Layers listed highest-precedence first. Kept as a local literal: a runtime
- * import from `@agentview/core` would drag its Node file-system module into
+ * import from `@agentpov/core` would drag its Node file-system module into
  * the browser bundle.
  */
 export const SETTINGS_LAYER_ORDER: ConfigLayer[] = [

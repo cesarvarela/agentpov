@@ -1,8 +1,8 @@
 # electron-builder config for the macOS release (see README "Releasing").
 # Everything the app needs is bundled into out/ by electron-vite, so the
 # package ships no node_modules: runtime libraries live in devDependencies.
-appId: com.cesarvarela.agentview
-productName: agentview
+appId: com.cesarvarela.agentpov
+productName: agentpov
 copyright: Copyright © 2026 Cesar Varela
 
 directories:
@@ -29,8 +29,8 @@ mac:
 
 dmg:
   # Stable, version-less name so the landing page can link to
-  # releases/latest/download/agentview-mac.dmg.
-  artifactName: agentview-mac.${ext}
+  # releases/latest/download/agentpov-mac.dmg.
+  artifactName: agentpov-mac.${ext}
   title: ${productName}
   writeUpdateInfo: false
   # Sign the DMG itself; the release workflow then notarizes and staples it so

@@ -9,7 +9,7 @@ const NO_DRAG = { WebkitAppRegion: "no-drag" } as CSSProperties;
 /** Recents shown in the menu, after leaving out the open project. */
 const MENU_RECENTS = 8;
 
-const localHome = window.agentview?.homeDir ?? "";
+const localHome = window.agentpov?.homeDir ?? "";
 
 /** Square, outlined host tag; structure, not state, so it carries no color. */
 export function HostBadge({ host, icon = true }: { host: string; icon?: boolean }) {

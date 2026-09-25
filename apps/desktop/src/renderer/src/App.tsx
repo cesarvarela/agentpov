@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Allotment, LayoutPriority } from "allotment";
-import { Button } from "@agentview/ui";
+import { Button } from "@agentpov/ui";
 
 import { ContextView } from "./components/ContextView";
 import { FileTree } from "./components/FileTree";
@@ -19,7 +19,7 @@ import {
 import { useSource } from "./hooks/useSource";
 import { displayPath } from "./lib/paths";
 
-const isMac = window.agentview?.platform === "darwin";
+const isMac = window.agentpov?.platform === "darwin";
 
 const SOURCE_DEFAULT_WIDTH = 480;
 const SOURCE_MIN_WIDTH = 320;
@@ -35,7 +35,7 @@ function typingInField(): boolean {
 }
 
 export default function App() {
-  const [appName, setAppName] = useState("agentview");
+  const [appName, setAppName] = useState("agentpov");
   const project = useProject();
   const { homeDir } = project;
   const [remoteOpen, setRemoteOpen] = useState(false);
@@ -60,7 +60,7 @@ export default function App() {
   });
 
   useEffect(() => {
-    window.agentview
+    window.agentpov
       ?.getAppName()
       .then(setAppName)
       .catch(() => {});
@@ -300,9 +300,9 @@ export default function App() {
           ) : null}
 
           <p className="text-muted-foreground font-mono text-[11px]">
-            electron {window.agentview?.versions.electron ?? "—"} · chrome{" "}
-            {window.agentview?.versions.chrome ?? "—"} · node{" "}
-            {window.agentview?.versions.node ?? "—"}
+            electron {window.agentpov?.versions.electron ?? "—"} · chrome{" "}
+            {window.agentpov?.versions.chrome ?? "—"} · node{" "}
+            {window.agentpov?.versions.node ?? "—"}
           </p>
         </main>
       )}

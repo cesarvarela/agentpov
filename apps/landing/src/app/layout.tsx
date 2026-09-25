@@ -14,7 +14,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "agentview — see your folder the way your agent does",
+  title: "agentpov — see your folder the way your agent does",
   description:
     "A desktop app that shows which CLAUDE.md files, memory, settings, permission rules, hooks, skills, agents and MCP servers actually affect a given file.",
 };

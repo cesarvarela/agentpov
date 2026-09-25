@@ -48,7 +48,7 @@ export interface Project {
 
 
 export function useProject(): Project {
-  const api = window.agentview;
+  const api = window.agentpov;
 
   const [folder, setFolder] = useState<string | null>(null);
   const [host, setHost] = useState<string | null>(null);

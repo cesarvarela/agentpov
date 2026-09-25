@@ -17,10 +17,10 @@ importers:
 
   apps/desktop:
     devDependencies:
-      '@agentview/core':
+      '@agentpov/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@agentview/ui':
+      '@agentpov/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@tailwindcss/vite':
@@ -74,7 +74,7 @@ importers:
 
   apps/landing:
     dependencies:
-      '@agentview/ui':
+      '@agentpov/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       next:

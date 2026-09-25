@@ -1,5 +1,5 @@
 {
-  "name": "@agentview/landing",
+  "name": "@agentpov/landing",
   "version": "0.0.0",
   "private": true,
   "scripts": {
@@ -10,7 +10,7 @@
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
-    "@agentview/ui": "workspace:*",
+    "@agentpov/ui": "workspace:*",
     "next": "16.3.5",
     "react": "19.2.8",
     "react-dom": "19.2.8"

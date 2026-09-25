@@ -39,9 +39,9 @@ jobs:
         uses: actions/configure-pages@v6
 
       - name: Build static site
-        run: pnpm -F @agentview/landing build
+        run: pnpm -F @agentpov/landing build
         env:
-          # "/agentview" on github.io, empty once a custom domain is set.
+          # "/agentpov" on github.io, empty once a custom domain is set.
           PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
 
       - uses: actions/upload-pages-artifact@v5

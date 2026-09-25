@@ -1,5 +1,5 @@
 {
-  "name": "@agentview/core",
+  "name": "@agentpov/core",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -19,7 +19,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "echo \"(no linter configured for @agentview/core)\""
+    "lint": "echo \"(no linter configured for @agentpov/core)\""
   },
   "devDependencies": {
     "@types/node": "24.13.6",

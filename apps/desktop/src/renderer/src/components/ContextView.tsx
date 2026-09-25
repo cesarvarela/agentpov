@@ -1,9 +1,9 @@
-import { Badge, ScrollArea } from "@agentview/ui";
+import { Badge, ScrollArea } from "@agentpov/ui";
 import type {
   PermissionDecision,
   ResolvedContext,
   SettingsEntry,
-} from "@agentview/core";
+} from "@agentpov/core";
 
 import {
   editHooks,
@@ -515,7 +515,7 @@ export function ContextView({
       <div className="flex flex-1 flex-col items-center justify-center gap-2 px-8 text-center">
         <p className="text-om-text text-sm">Open a folder to get started.</p>
         <p className="text-om-muted max-w-sm text-xs">
-          agentview will show the instructions, memory, permission rules and
+          agentpov will show the instructions, memory, permission rules and
           hooks that apply to it.
         </p>
       </div>

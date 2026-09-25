@@ -1,7 +1,7 @@
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import { app, BrowserWindow, dialog, ipcMain, shell, webContents } from "electron";
-import { resolveContext } from "@agentview/core";
+import { resolveContext } from "@agentpov/core";
 
 import type {
   FileNode,
@@ -66,7 +66,7 @@ app.whenReady().then(() => {
   // the stock Electron.app, so swap its dock icon for ours.
   if (isDev) app.dock?.setIcon(join(__dirname, "../../build/icon.png"));
 
-  ipcMain.handle("app:getName", () => "agentview");
+  ipcMain.handle("app:getName", () => "agentpov");
 
   ipcMain.handle("dialog:openFolder", async (event): Promise<string | null> => {
     const win = BrowserWindow.fromWebContents(event.sender);

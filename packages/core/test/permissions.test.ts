@@ -12,7 +12,7 @@ const HOME = "/home/dev";
 const FOLDER = "/projects/fixtures/permissions";
 
 /**
- * The two fixture repos in `agentview-fixtures` (`permissions-precedence` and
+ * The two fixture repos in `agentpov-fixtures` (`permissions-precedence` and
  * `permissions-globs`), turned into resolver runs over the injectable fs.
  */
 function resolve(

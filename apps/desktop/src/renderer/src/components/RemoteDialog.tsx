@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button } from "@agentview/ui";
+import { Button } from "@agentpov/ui";
 
 import type { RemoteInfo } from "../../../shared/ipc";
 import { errorMessage } from "../lib/errors";
@@ -26,7 +26,7 @@ export function RemoteDialog({
   onOpen,
   onClose,
 }: RemoteDialogProps) {
-  const api = window.agentview;
+  const api = window.agentpov;
   const [step, setStep] = useState<Step>({ kind: "host" });
   const [hostInput, setHostInput] = useState("");
   const [pathInput, setPathInput] = useState("");

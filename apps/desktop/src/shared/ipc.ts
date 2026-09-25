@@ -4,7 +4,7 @@
  * Keep this file dependency-free apart from type-only imports: it is pulled
  * into both the node and the web tsconfig.
  */
-import type { ResolvedContext, TargetKind } from "@agentview/core";
+import type { ResolvedContext, TargetKind } from "@agentpov/core";
 
 export type { ResolvedContext, TargetKind };
 

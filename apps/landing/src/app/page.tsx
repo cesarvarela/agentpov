@@ -5,12 +5,12 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@agentview/ui";
+} from "@agentpov/ui";
 
-const REPO_URL = "https://github.com/cesarvarela/agentview";
+const REPO_URL = "https://github.com/cesarvarela/agentpov";
 // Stable asset name (see apps/desktop/electron-builder.yml), so this always
 // resolves to the newest release.
-const DOWNLOAD_URL = `${REPO_URL}/releases/latest/download/agentview-mac.dmg`;
+const DOWNLOAD_URL = `${REPO_URL}/releases/latest/download/agentpov-mac.dmg`;
 
 const features = [
   {
@@ -42,7 +42,7 @@ export default function Home() {
           <span className="text-om-amber">coding agent</span> does.
         </h1>
         <p className="text-muted-foreground max-w-2xl text-lg">
-          agentview is a desktop app that resolves, for any file you select,
+          agentpov is a desktop app that resolves, for any file you select,
           exactly which instructions, settings, permission rules, hooks, skills,
           agents and MCP servers are in effect — and where each one came from.
         </p>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Badge } from "@agentview/ui";
+import { Badge } from "@agentpov/ui";
 
 import type { SourceTarget } from "../hooks/useSource";
 import { layerLabel } from "../lib/derive";
@@ -118,7 +118,7 @@ export function SourcePane({
   onBack,
   onForward,
 }: SourcePaneProps) {
-  const api = window.agentview;
+  const api = window.agentpov;
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
