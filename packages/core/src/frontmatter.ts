@@ -38,23 +38,62 @@ function parseInlineList(value: string): string[] {
   return items.filter((item) => item.length > 0);
 }
 
+const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
+
+/** A `|` or `>` block scalar header, with optional chomping/indent indicators. */
+const BLOCK_SCALAR = /^([|>])[+-]?\d*[+-]?$/;
+
+/**
+ * Joins the lines of a block scalar: `|` keeps line breaks, `>` folds them
+ * into spaces except at blank lines. Trailing newlines are dropped whatever
+ * the chomping indicator says; callers only display the value.
+ */
+function joinBlockScalar(style: string, lines: string[]): string {
+  const indent = Math.min(
+    ...lines
+      .filter((line) => line.trim().length > 0)
+      .map((line) => line.length - line.trimStart().length),
+  );
+  const dedented = lines.map((line) => line.slice(Number.isFinite(indent) ? indent : 0));
+  if (style === "|") return dedented.join("\n").trimEnd();
+  return dedented
+    .join("\n")
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.split("\n").join(" ").trim())
+    .join("\n")
+    .trimEnd();
+}
+
 /**
  * The YAML frontmatter fields skills, agents and rules actually use: top-level
- * scalars, plus top-level lists written either as `- item` lines or inline as
- * `[a, b]`. Nested maps are still ignored.
+ * scalars (including `|` and `>` block scalars), plus top-level lists written
+ * either as `- item` lines or inline as `[a, b]`. Nested maps are still ignored.
  */
 export function parseFrontmatterFields(
   content: string,
 ): Record<string, FrontmatterValue> {
-  const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(content);
+  const match = FRONTMATTER.exec(content);
   if (!match) return {};
   const body = match[1] ?? "";
   const values: Record<string, FrontmatterValue> = {};
   // The key a bare `- item` line belongs to, i.e. the last key whose value was
   // left empty.
   let listKey: string | null = null;
+  // The block scalar being collected: its key, style and raw lines so far.
+  let block: { key: string; style: string; lines: string[] } | null = null;
+
+  const finishBlock = (): void => {
+    if (block) values[block.key] = joinBlockScalar(block.style, block.lines);
+    block = null;
+  };
 
   for (const rawLine of body.split(/\r?\n/)) {
+    if (block && (rawLine.trim().length === 0 || /^\s/.test(rawLine))) {
+      block.lines.push(rawLine);
+      continue;
+    }
+    finishBlock();
+
     const line = rawLine.trimEnd();
     const trimmed = line.trim();
     if (trimmed.length === 0 || trimmed.startsWith("#")) continue;
@@ -81,13 +120,40 @@ export function parseFrontmatterFields(
       continue;
     }
     listKey = null;
+    const blockHeader = BLOCK_SCALAR.exec(rawValue);
+    if (blockHeader) {
+      block = { key, style: blockHeader[1]!, lines: [] };
+      continue;
+    }
     if (rawValue.startsWith("[") && rawValue.endsWith("]")) {
       values[key] = parseInlineList(rawValue);
       continue;
     }
     values[key] = unquote(rawValue);
   }
+  finishBlock();
   return values;
+}
+
+/** `content` without its frontmatter block, if it has one. */
+export function stripFrontmatter(content: string): string {
+  const match = FRONTMATTER.exec(content);
+  return match ? content.slice(match[0].length) : content;
+}
+
+/**
+ * One line that says what a markdown file is: its frontmatter `description`,
+ * else its first non-blank line after the frontmatter.
+ */
+export function summarize(content: string): string | undefined {
+  const description = parseFrontmatter(content)["description"];
+  const text =
+    description ??
+    stripFrontmatter(content)
+      .split(/\r?\n/)
+      .find((line) => line.trim().length > 0);
+  const firstLine = text?.split("\n")[0]?.trim();
+  return firstLine ? firstLine : undefined;
 }
 
 /** The scalar frontmatter fields only; lists are left out. */

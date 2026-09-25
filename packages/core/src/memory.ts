@@ -7,7 +7,7 @@ import {
   userClaudeDir,
   type ResolveRun,
 } from "./context.js";
-import { frontmatterList, parseFrontmatterFields } from "./frontmatter.js";
+import { frontmatterList, parseFrontmatterFields, summarize } from "./frontmatter.js";
 import { globCoversDirectory, matchGlob } from "./glob.js";
 import { descendingChain, toAbsolute, toPosix } from "./paths.js";
 import {
@@ -121,6 +121,8 @@ async function readMemoryFile(
     loading,
     scopedToFile: candidate.scopedToFile,
   };
+  const summary = summarize(content);
+  if (summary) entry.summary = summary;
   if (candidate.globs) entry.appliesToGlobs = candidate.globs;
   if (extra) {
     entry.importedBy = extra.importedBy;

@@ -378,8 +378,7 @@ export function FolderContextView({
                   {basename(entry.path)}
                 </span>
                 <span className="text-om-muted min-w-0 flex-1 truncate text-[11px]">
-                  {entry.content?.split("\n").find((line) => line.trim() !== "")
-                    ?.trim()}
+                  {entry.summary}
                 </span>
               </RowButton>
             ))

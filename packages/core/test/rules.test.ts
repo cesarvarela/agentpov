@@ -347,3 +347,39 @@ describe("frontmatter lists", () => {
     });
   });
 });
+
+describe("frontmatter block scalars", () => {
+  it("reads a | description as its dedented lines", () => {
+    const content = ["---", "name: promo", "description: |", "  Line one.", "  Line two.", "user-invocable: true", "---", "", "body"].join("\n");
+    expect(parseFrontmatter(content)).toEqual({
+      name: "promo",
+      description: "Line one.\nLine two.",
+      "user-invocable": "true",
+    });
+  });
+
+  it("folds a >- description into one line, keeping paragraph breaks", () => {
+    const content = ["---", "description: >-", "  Folded", "  text.", "", "  Next.", "---"].join("\n");
+    expect(parseFrontmatter(content)["description"]).toBe("Folded text.\nNext.");
+  });
+});
+
+describe("memory summary", () => {
+  it("uses the frontmatter description of a memory file", async () => {
+    const result = await run({
+      [`${HOME}/.claude/projects/-projects-acme-shop-api/memory/ports.md`]: frontmatter(
+        ["name: ports", "description: Dev ports live in the 4000 range"],
+        "Landing 4000, desktop 4001.",
+      ),
+    });
+    const entry = result.memory.find((e) => e.kind === "memory-file");
+    expect(entry?.summary).toBe("Dev ports live in the 4000 range");
+  });
+
+  it("falls back to the first body line after the frontmatter", async () => {
+    const result = await run({
+      [`${FOLDER}/.claude/rules/style.md`]: frontmatter(["paths: src/**"], "\n# Style"),
+    });
+    expect(rules(result)[0]?.summary).toBe("# Style");
+  });
+});

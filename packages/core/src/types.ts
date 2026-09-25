@@ -54,6 +54,11 @@ export interface MemoryEntry extends ConfigSource {
   /** Size in bytes, if known. */
   bytes?: number;
   /**
+   * One line saying what the file is: its frontmatter `description`, else its
+   * first non-blank line after the frontmatter.
+   */
+  summary?: string;
+  /**
    * For `rule`: the `paths:` globs it declares, as written (project-relative,
    * before brace expansion). Absent when the rule always loads.
    */
