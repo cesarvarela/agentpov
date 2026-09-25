@@ -1,11 +1,12 @@
 import type { CSSProperties } from "react";
 
+import type { RecentProject } from "../lib/recents";
 import {
-  FolderIcon,
   LogoIcon,
   SidebarIcon,
   SidebarRightIcon,
 } from "./Icons";
+import { ProjectSwitcher } from "./ProjectSwitcher";
 
 const DRAG = { WebkitAppRegion: "drag" } as CSSProperties;
 const NO_DRAG = { WebkitAppRegion: "no-drag" } as CSSProperties;
@@ -15,11 +16,18 @@ const AGENTS = ["Claude Code", "Codex", "Cursor", "Gemini CLI"] as const;
 interface TopBarProps {
   appName: string;
   folder: string | null;
+  /** SSH host of the open folder, or null for a local one. */
+  host: string | null;
   folderLabel: string;
+  recents: RecentProject[];
+  /** A recent project is being opened. */
+  opening: boolean;
   isMac: boolean;
   sidebarCollapsed: boolean;
   sourceOpen: boolean;
   onOpenFolder: () => void;
+  onOpenRemote: () => void;
+  onOpenRecent: (entry: RecentProject) => void;
   onToggleSidebar: () => void;
   onToggleSource: () => void;
 }
@@ -27,11 +35,16 @@ interface TopBarProps {
 export function TopBar({
   appName,
   folder,
+  host,
   folderLabel,
+  recents,
+  opening,
   isMac,
   sidebarCollapsed,
   sourceOpen,
   onOpenFolder,
+  onOpenRemote,
+  onOpenRecent,
   onToggleSidebar,
   onToggleSource,
 }: TopBarProps) {
@@ -78,16 +91,17 @@ export function TopBar({
       </div>
 
       <div className="flex min-w-0 flex-1 items-center">
-        <button
-          type="button"
-          onClick={onOpenFolder}
-          title={folder ? "Open another folder" : "Open folder"}
-          style={NO_DRAG}
-          className="text-om-muted hover:text-om-text hover:bg-om-raised flex h-7 min-w-0 max-w-full cursor-pointer items-center gap-2 rounded-md px-2 font-mono text-xs transition-colors"
-        >
-          <FolderIcon className="shrink-0" />
-          <span className="truncate">{folder ? folderLabel : "Open folder…"}</span>
-        </button>
+        <ProjectSwitcher
+          folder={folder}
+          host={host}
+          folderLabel={folderLabel}
+          recents={recents}
+          opening={opening}
+          isMac={isMac}
+          onOpenFolder={onOpenFolder}
+          onOpenRemote={onOpenRemote}
+          onOpenRecent={onOpenRecent}
+        />
       </div>
 
       <div className="flex shrink-0 items-center gap-2" style={NO_DRAG}>

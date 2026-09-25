@@ -50,6 +50,8 @@ interface SourcePaneProps {
   source: SourceTarget;
   folder: string;
   homeDir: string;
+  /** True when the folder is on an SSH host, where there is no local editor to open. */
+  remote: boolean;
   /** Opens another file in the pane: an `@import`, a hook script, a parent. */
   onOpenPath: (path: string, line?: number) => void;
   canGoBack: boolean;
@@ -109,6 +111,7 @@ export function SourcePane({
   source,
   folder,
   homeDir,
+  remote,
   onOpenPath,
   canGoBack,
   canGoForward,
@@ -229,16 +232,18 @@ export function SourcePane({
           <span className="text-om-muted shrink-0 text-[11px]">{size}</span>
         ) : null}
         {Viewer ? <ModeToggle mode={mode} onPick={pickMode} /> : null}
-        <button
-          type="button"
-          onClick={() => void api?.openInEditor(path)}
-          title="Open in editor"
-          aria-label="Open in editor"
-          className="border-om-border bg-om-raised text-om-muted hover:text-om-text flex h-[22px] shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2 text-[11px] transition-colors"
-        >
-          <ExternalLinkIcon className="size-3.5" />
-          Open in editor
-        </button>
+        {remote ? null : (
+          <button
+            type="button"
+            onClick={() => void api?.openInEditor(path)}
+            title="Open in editor"
+            aria-label="Open in editor"
+            className="border-om-border bg-om-raised text-om-muted hover:text-om-text flex h-[22px] shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2 text-[11px] transition-colors"
+          >
+            <ExternalLinkIcon className="size-3.5" />
+            Open in editor
+          </button>
+        )}
       </header>
 
       {source.importedAt ? (

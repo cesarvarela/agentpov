@@ -1,17 +1,25 @@
-import { readFile, stat } from "node:fs/promises";
-import { homedir } from "node:os";
+import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
-import { createNodeFileSystem, resolveContext } from "@agentview/core";
+import { resolveContext } from "@agentview/core";
 
-import {
-  READ_FILE_MAX_BYTES,
-  type FileNode,
-  type ReadFileResult,
-  type ResolvedContext,
-  type TargetKind,
+import type {
+  FileNode,
+  ReadFileResult,
+  RemoteInfo,
+  ResolvedContext,
+  SshPrompt,
+  TargetKind,
 } from "../shared/ipc";
-import { listTree } from "./tree";
+import {
+  backendFor,
+  closeAllRemotes,
+  connectRemote,
+  openRemote,
+  resetToLocal,
+} from "./backends";
+import { startAskpass, stopAskpass } from "./ssh/askpass";
+import { listSshHosts } from "./ssh/config";
 
 const isDev = !app.isPackaged;
 
@@ -34,6 +42,9 @@ function createWindow(): BrowserWindow {
   });
 
   window.once("ready-to-show", () => window.show());
+
+  const contentsId = window.webContents.id;
+  window.on("closed", () => resetToLocal(contentsId));
 
   window.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url);
@@ -59,51 +70,91 @@ app.whenReady().then(() => {
       ? await dialog.showOpenDialog(win, { properties: ["openDirectory"] })
       : await dialog.showOpenDialog({ properties: ["openDirectory"] });
     if (result.canceled || result.filePaths.length === 0) return null;
+    resetToLocal(event.sender.id);
     return result.filePaths[0] ?? null;
   });
 
   ipcMain.handle(
+    "fs:openLocal",
+    async (event, folder: string): Promise<string> => {
+      const info = await stat(folder).catch(() => null);
+      if (!info?.isDirectory()) throw new Error(`No folder at ${folder}`);
+      resetToLocal(event.sender.id);
+      return folder;
+    },
+  );
+
+  ipcMain.handle("ssh:listHosts", (): Promise<string[]> => listSshHosts());
+
+  ipcMain.handle(
+    "ssh:connect",
+    (_event, host: string): Promise<RemoteInfo> => connectRemote(host),
+  );
+
+  ipcMain.handle(
+    "ssh:openFolder",
+    (event, host: string, folder: string): Promise<RemoteInfo & { folder: string }> =>
+      openRemote(event.sender.id, host, folder),
+  );
+
+  const prompts = new Map<number, (value: string | null) => void>();
+
+  ipcMain.handle("ssh:answer", (_event, id: number, value: string | null) => {
+    prompts.get(id)?.(value);
+    prompts.delete(id);
+  });
+
+  startAskpass(
+    (prompt: SshPrompt) =>
+      new Promise<string | null>((resolve) => {
+        const win =
+          BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+        if (!win) {
+          resolve(null);
+          return;
+        }
+        prompts.set(prompt.id, resolve);
+        win.webContents.send("ssh:prompt", prompt);
+      }),
+  );
+
+  ipcMain.handle(
     "fs:listTree",
-    (_event, folder: string): Promise<FileNode> => listTree(folder),
+    (event, folder: string): Promise<FileNode> =>
+      backendFor(event.sender.id).listTree(folder),
   );
 
   ipcMain.handle(
     "context:resolve",
     (
-      _event,
+      event,
       folder: string,
       target: string,
       targetKind: TargetKind = "file",
-    ): Promise<ResolvedContext> =>
-      resolveContext(folder, target, {
-        fs: createNodeFileSystem(),
-        homeDir: homedir(),
+    ): Promise<ResolvedContext> => {
+      const backend = backendFor(event.sender.id);
+      return resolveContext(folder, target, {
+        fs: backend.fs,
+        homeDir: backend.homeDir,
+        platform: backend.platform,
         targetKind,
-      }),
-  );
-
-  ipcMain.handle(
-    "fs:readFile",
-    async (_event, path: string): Promise<ReadFileResult> => {
-      const info = await stat(path);
-      if (!info.isFile()) throw new Error(`Not a file: ${path}`);
-
-      const buffer = await readFile(path);
-      const truncated = buffer.byteLength > READ_FILE_MAX_BYTES;
-      const slice = truncated ? buffer.subarray(0, READ_FILE_MAX_BYTES) : buffer;
-
-      return {
-        path,
-        content: slice.toString("utf8"),
-        bytes: info.size,
-        truncated,
-      };
+      });
     },
   );
 
   ipcMain.handle(
+    "fs:readFile",
+    (event, path: string): Promise<ReadFileResult> =>
+      backendFor(event.sender.id).readFile(path),
+  );
+
+  ipcMain.handle(
     "shell:openInEditor",
-    async (_event, path: string): Promise<string> => shell.openPath(path),
+    async (event, path: string): Promise<string> => {
+      const { host } = backendFor(event.sender.id);
+      if (host) return `${path} is on ${host}`;
+      return shell.openPath(path);
+    },
   );
 
   createWindow();
@@ -111,6 +162,11 @@ app.whenReady().then(() => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+app.on("will-quit", () => {
+  closeAllRemotes();
+  stopAskpass();
 });
 
 app.on("window-all-closed", () => {

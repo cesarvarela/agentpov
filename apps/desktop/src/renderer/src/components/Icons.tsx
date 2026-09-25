@@ -46,6 +46,16 @@ export function FolderIcon(props: IconProps) {
   );
 }
 
+export function ServerIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="2" y="2.5" width="12" height="4.5" rx="1" />
+      <rect x="2" y="9" width="12" height="4.5" rx="1" />
+      <path d="M4.5 4.75h.01M4.5 11.25h.01" />
+    </Icon>
+  );
+}
+
 export function FileIcon(props: IconProps) {
   return (
     <Icon {...props}>

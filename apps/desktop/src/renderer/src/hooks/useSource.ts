@@ -30,6 +30,8 @@ export interface SourceState {
   open: boolean;
   openSource: (target: SourceTarget) => void;
   closeSource: () => void;
+  /** Closes the pane and forgets its history, for when another project opens. */
+  reset: () => void;
   toggle: () => void;
   canGoBack: boolean;
   canGoForward: boolean;
@@ -88,6 +90,11 @@ export function useSource(): SourceState {
     setOpen(false);
   }, []);
 
+  const reset = useCallback(() => {
+    setHistory({ entries: [], index: -1 });
+    setOpen(false);
+  }, []);
+
   const toggle = useCallback(() => {
     setOpen((value) => !value);
   }, []);
@@ -117,6 +124,7 @@ export function useSource(): SourceState {
     open,
     openSource,
     closeSource,
+    reset,
     toggle,
     canGoBack: index > 0,
     canGoForward: index < entries.length - 1,

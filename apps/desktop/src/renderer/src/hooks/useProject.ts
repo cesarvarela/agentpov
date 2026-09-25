@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { FileNode, ResolvedContext, TargetKind } from "../../../shared/ipc";
+import { errorMessage } from "../lib/errors";
 import { ancestorDirs } from "../lib/paths";
+import { loadRecents, rememberRecent, type RecentProject } from "../lib/recents";
 
 export interface FileDetail {
   lines: number;
@@ -18,6 +20,10 @@ export interface SelectedTarget {
 
 export interface Project {
   folder: string | null;
+  /** SSH host the folder lives on, or null for a local folder. */
+  host: string | null;
+  /** Home directory on the machine the folder lives on, for `~/` paths. */
+  homeDir: string;
   tree: FileNode | null;
   /** Resolution target; the project root right after a folder is opened. */
   target: SelectedTarget | null;
@@ -28,18 +34,27 @@ export interface Project {
   loading: boolean;
   error: string | null;
   openFolder: () => Promise<void>;
+  /** Opens `path` on an SSH host; rejects when it is not a folder. */
+  openRemote: (host: string, path: string) => Promise<void>;
+  /** Folders opened before, most recent first; includes the open one. */
+  recents: RecentProject[];
+  /** Reopens a recent folder directly, connecting to its host if needed. */
+  openRecent: (entry: RecentProject) => Promise<void>;
+  /** True while a folder is being opened (connecting, listing its tree). */
+  opening: boolean;
   select: (path: string, kind: TargetKind) => void;
   toggleDir: (path: string) => void;
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 export function useProject(): Project {
   const api = window.agentview;
 
   const [folder, setFolder] = useState<string | null>(null);
+  const [host, setHost] = useState<string | null>(null);
+  const [homeDir, setHomeDir] = useState(api?.homeDir ?? "");
+  const [recents, setRecents] = useState<RecentProject[]>(loadRecents);
+  const [opening, setOpening] = useState(false);
   const [tree, setTree] = useState<FileNode | null>(null);
   const [target, setTarget] = useState<SelectedTarget | null>(null);
   const [context, setContext] = useState<ResolvedContext | null>(null);
@@ -51,25 +66,84 @@ export function useProject(): Project {
   /** Guards against out-of-order responses when clicking quickly. */
   const requestId = useRef(0);
 
+  /** Shows `root` with the project root as the target, then loads its tree. */
+  const load = useCallback(
+    async (root: string) => {
+      if (!api) return;
+      setError(null);
+      setFolder(root);
+      // Nothing is selected yet, so the project root is the target.
+      setTarget({ path: root, kind: "directory" });
+      setContext(null);
+      setDetail(null);
+      setTree(null);
+      // The context effect only starts after this render; show it as loading now.
+      setLoading(true);
+      const next = await api.listTree(root);
+      setTree(next);
+      setExpanded(new Set([root, ...(next.children ?? []).map((c) => c.path)]));
+    },
+    [api],
+  );
+
   const openFolder = useCallback(async () => {
     if (!api) return;
     try {
       const picked = await api.openFolder();
       if (!picked) return;
-      setError(null);
-      setFolder(picked);
-      // Nothing is selected yet, so the project root is the target.
-      setTarget({ path: picked, kind: "directory" });
-      setContext(null);
-      setDetail(null);
-      setTree(null);
-      const next = await api.listTree(picked);
-      setTree(next);
-      setExpanded(new Set([picked, ...(next.children ?? []).map((c) => c.path)]));
+      setHost(null);
+      setHomeDir(api.homeDir);
+      setRecents(rememberRecent({ host: null, path: picked }));
+      await load(picked);
     } catch (cause) {
       setError(errorMessage(cause));
     }
-  }, [api]);
+  }, [api, load]);
+
+  const openRemote = useCallback(
+    async (remoteHost: string, path: string) => {
+      if (!api) return;
+      // Rejections before the switch stay with the caller (the remote dialog).
+      const opened = await api.openRemoteFolder(remoteHost, path);
+      setHost(opened.host);
+      setHomeDir(opened.homeDir);
+      setRecents(
+        rememberRecent({
+          host: opened.host,
+          path: opened.folder,
+          homeDir: opened.homeDir,
+        }),);
+      try {
+        await load(opened.folder);
+      } catch (cause) {
+        setError(errorMessage(cause));
+      }
+    },
+    [api, load],
+  );
+
+  const openRecent = useCallback(
+    async (entry: RecentProject) => {
+      if (!api) return;
+      setOpening(true);
+      try {
+        if (entry.host) {
+          await openRemote(entry.host, entry.path);
+        } else {
+          const path = await api.openLocalFolder(entry.path);
+          setHost(null);
+          setHomeDir(api.homeDir);
+          setRecents(rememberRecent({ host: null, path }));
+          await load(path);
+        }
+      } catch (cause) {
+        setError(errorMessage(cause));
+      } finally {
+        setOpening(false);
+      }
+    },
+    [api, load, openRemote],
+  );
 
   const select = useCallback(
     (path: string, kind: TargetKind) => {
@@ -137,6 +211,8 @@ export function useProject(): Project {
 
   return {
     folder,
+    host,
+    homeDir,
     tree,
     target,
     context,
@@ -145,6 +221,10 @@ export function useProject(): Project {
     loading,
     error,
     openFolder,
+    openRemote,
+    recents,
+    openRecent,
+    opening,
     select,
     toggleDir,
   };

@@ -31,3 +31,18 @@ export interface ReadFileResult {
   bytes: number;
   truncated: boolean;
 }
+
+/** An SSH host the window is connected to, with the remote user's home and OS. */
+export interface RemoteInfo {
+  host: string;
+  homeDir: string;
+  platform: NodeJS.Platform;
+}
+
+/** A question ssh asks while connecting: passphrase, password, 2FA or host key. */
+export interface SshPrompt {
+  id: number;
+  host: string;
+  /** ssh's own prompt text, shown verbatim. */
+  message: string;
+}

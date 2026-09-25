@@ -4,7 +4,10 @@ import { Button } from "@agentview/ui";
 
 import { ContextView } from "./components/ContextView";
 import { FileTree } from "./components/FileTree";
+import { RecentRow } from "./components/ProjectSwitcher";
+import { RemoteDialog } from "./components/RemoteDialog";
 import { SourcePane, SourcePaneEmpty } from "./components/SourcePane";
+import { SshPromptDialog } from "./components/SshPromptDialog";
 import { TopBar } from "./components/TopBar";
 import { useProject } from "./hooks/useProject";
 import { usePanePersistence } from "./hooks/usePanePersistence";
@@ -17,7 +20,6 @@ import { useSource } from "./hooks/useSource";
 import { displayPath } from "./lib/paths";
 
 const isMac = window.agentview?.platform === "darwin";
-const homeDir = window.agentview?.homeDir ?? "";
 
 const SOURCE_DEFAULT_WIDTH = 480;
 const SOURCE_MIN_WIDTH = 320;
@@ -35,12 +37,16 @@ function typingInField(): boolean {
 export default function App() {
   const [appName, setAppName] = useState("agentview");
   const project = useProject();
+  const { homeDir } = project;
+  const [remoteOpen, setRemoteOpen] = useState(false);
+  const closeRemote = useCallback(() => setRemoteOpen(false), []);
   const sidebar = useSidebar();
   const {
     source,
     open: sourceOpen,
     openSource,
     closeSource,
+    reset: resetSource,
     toggle: toggleSource,
     canGoBack,
     canGoForward,
@@ -112,7 +118,29 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [goBack, goForward, sourceOpen]);
 
-  const { folder } = project;
+  const { folder, openFolder } = project;
+
+  /** Cmd/Ctrl+O opens a local folder, with Shift a folder over SSH. */
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (!(isMac ? event.metaKey : event.ctrlKey)) return;
+      if (event.key.toLowerCase() !== "o") return;
+      event.preventDefault();
+      if (event.shiftKey) setRemoteOpen(true);
+      else void openFolder();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [openFolder]);
+
+  /**
+   * Another project drops the source pane and its history: those paths belong
+   * to the previous folder, possibly on another machine.
+   */
+  useEffect(() => {
+    resetSource();
+  }, [folder, project.host, resetSource]);
 
   /** Opening a folder always reveals the tree, even if it was collapsed before. */
   useEffect(() => {
@@ -124,11 +152,16 @@ export default function App() {
       <TopBar
         appName={appName}
         folder={folder}
+        host={project.host}
         folderLabel={folder ? displayPath(folder, null, homeDir) : ""}
+        recents={project.recents}
+        opening={project.opening}
         isMac={isMac}
         sidebarCollapsed={sidebar.collapsed}
         sourceOpen={sourceOpen}
         onOpenFolder={() => void project.openFolder()}
+        onOpenRemote={() => setRemoteOpen(true)}
+        onOpenRecent={(entry) => void project.openRecent(entry)}
         onToggleSidebar={sidebar.toggle}
         onToggleSource={toggleSource}
       />
@@ -166,16 +199,29 @@ export default function App() {
                       {project.error}
                     </div>
                   ) : null}
-                  <ContextView
-                    context={project.context}
-                    detail={project.detail}
-                    folder={folder}
-                    target={project.target}
-                    homeDir={homeDir}
-                    loading={project.loading}
-                    activeSourceKey={source?.key ?? null}
-                    onOpenSource={openSource}
-                  />
+                  {!project.context && project.loading ? (
+                    <div className="flex flex-1 flex-col items-center justify-center gap-2 px-8 text-center">
+                      <p className="text-om-text animate-pulse text-sm">
+                        {project.host
+                          ? `Reading agent context from ${project.host}…`
+                          : "Reading agent context…"}
+                      </p>
+                      <p className="text-om-muted max-w-sm text-xs">
+                        Instructions, memory, settings, hooks, skills and MCP servers.
+                      </p>
+                    </div>
+                  ) : (
+                    <ContextView
+                      context={project.context}
+                      detail={project.detail}
+                      folder={folder}
+                      target={project.target}
+                      homeDir={homeDir}
+                      loading={project.loading}
+                      activeSourceKey={source?.key ?? null}
+                      onOpenSource={openSource}
+                    />
+                  )}
                 </main>
               </Allotment.Pane>
 
@@ -188,6 +234,7 @@ export default function App() {
               >
                 {source ? (
                   <SourcePane
+                    remote={project.host !== null}
                     source={source}
                     folder={folder}
                     homeDir={homeDir}
@@ -220,7 +267,37 @@ export default function App() {
             agents and MCP servers affect a file.
           </p>
 
-          <Button onClick={() => void project.openFolder()}>Open folder</Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => void project.openFolder()}>
+              Open folder…
+            </Button>
+            <Button variant="outline" onClick={() => setRemoteOpen(true)}>
+              Open over SSH…
+            </Button>
+          </div>
+
+          {project.opening ? (
+            <p className="text-om-muted animate-pulse text-xs">Opening…</p>
+          ) : project.error ? (
+            <p className="text-om-deny max-w-md font-mono text-[11px]">{project.error}</p>
+          ) : null}
+
+          {project.recents.length > 0 ? (
+            <div className="flex w-[360px] max-w-full flex-col text-left">
+              <div className="text-om-muted px-2 pb-1 text-[11px]">Recent</div>
+              {project.recents.slice(0, 6).map((entry) => (
+                <button
+                  key={`${entry.host ?? ""}\t${entry.path}`}
+                  type="button"
+                  disabled={project.opening}
+                  onClick={() => void project.openRecent(entry)}
+                  className="hover:bg-om-raised flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors disabled:cursor-default disabled:opacity-60"
+                >
+                  <RecentRow entry={entry} />
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           <p className="text-muted-foreground font-mono text-[11px]">
             electron {window.agentview?.versions.electron ?? "—"} · chrome{" "}
@@ -229,6 +306,15 @@ export default function App() {
           </p>
         </main>
       )}
+
+      {remoteOpen ? (
+        <RemoteDialog
+          recents={project.recents}
+          onOpen={project.openRemote}
+          onClose={closeRemote}
+        />
+      ) : null}
+      <SshPromptDialog />
     </div>
   );
 }

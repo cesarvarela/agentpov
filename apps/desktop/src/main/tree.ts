@@ -87,3 +87,47 @@ export async function listTree(folder: string): Promise<FileNode> {
     children: await walk(folder, 1),
   };
 }
+
+/**
+ * Project tree from a flat list of absolute paths, as returned by a remote
+ * `find`. Paths use `/`; directories at the depth cap get no children, the
+ * same as `listTree`.
+ */
+export function buildTree(
+  folder: string,
+  entries: { path: string; isDirectory: boolean }[],
+  maxDepth: number,
+): FileNode {
+  const root: FileNode = {
+    name: folder.split("/").pop() || folder,
+    path: folder,
+    kind: "dir",
+    marks: [],
+    children: [],
+  };
+  const dirs = new Map<string, FileNode>([[folder, root]]);
+  const prefix = folder === "/" ? "/" : `${folder}/`;
+
+  // Parents sort before their children, so every parent exists when needed.
+  const sorted = entries
+    .filter((entry) => entry.path.startsWith(prefix))
+    .sort((a, b) => a.path.length - b.path.length);
+
+  for (const entry of sorted) {
+    const slash = entry.path.lastIndexOf("/");
+    const parent = dirs.get(slash === 0 ? "/" : entry.path.slice(0, slash));
+    if (!parent?.children) continue;
+    const name = entry.path.slice(slash + 1);
+    const kind = entry.isDirectory ? "dir" : "file";
+    const node: FileNode = { name, path: entry.path, kind, marks: marksForName(name, kind) };
+    if (entry.isDirectory) {
+      node.children = [];
+      const depth = entry.path.slice(prefix.length).split("/").length;
+      if (depth < maxDepth) dirs.set(entry.path, node);
+    }
+    parent.children.push(node);
+  }
+
+  for (const node of dirs.values()) node.children?.sort(compareNodes);
+  return root;
+}

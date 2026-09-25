@@ -25,6 +25,22 @@ interface RowProps {
   onToggleDir: (path: string) => void;
 }
 
+/** Placeholder rows while the tree is being listed (slow over SSH). */
+function TreeSkeleton() {
+  const widths = [62, 48, 70, 40, 55, 66, 44];
+  return (
+    <div aria-label="Loading files" className="flex flex-col gap-2.5 px-3 py-1.5">
+      {widths.map((width, index) => (
+        <div
+          key={index}
+          className="bg-om-raised h-2.5 animate-pulse rounded-sm"
+          style={{ width: `${width}%`, marginLeft: index % 3 === 2 ? 14 : 0 }}
+        />
+      ))}
+    </div>
+  );
+}
+
 /**
  * One tree row. Folders are selectable like files: the chevron expands and
  * collapses, the rest of the row makes the folder the context target.
@@ -170,7 +186,7 @@ export function FileTree({
           {basename(folder)}
         </button>
         <span className="text-om-muted shrink-0 text-[11px]">
-          {nodes} node{nodes === 1 ? "" : "s"}
+          {tree ? `${nodes} node${nodes === 1 ? "" : "s"}` : "Loading…"}
         </span>
       </div>
 
@@ -187,7 +203,7 @@ export function FileTree({
                 onToggleDir={onToggleDir}
               />
             ))
-          : null}
+          : <TreeSkeleton />}
       </ScrollArea>
 
       <div className="border-om-border flex shrink-0 flex-col gap-1.5 border-t px-3 py-2">
