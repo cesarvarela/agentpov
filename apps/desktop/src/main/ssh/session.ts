@@ -158,6 +158,10 @@ export class RemoteHost {
       let stderr = "";
       let started = false;
 
+      // Writing to a connection that just died fails with EPIPE; the close
+      // handler below already fails the pending requests, so don't crash here.
+      child.stdin.on("error", () => {});
+
       child.stderr.setEncoding("utf8");
       child.stderr.on("data", (chunk: string) => {
         stderr += chunk;
