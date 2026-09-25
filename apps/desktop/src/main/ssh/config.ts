@@ -24,7 +24,8 @@ export async function listSshHosts(): Promise<string[]> {
     for (const raw of text.split("\n")) {
       const line = raw.trim();
       if (!line || line.startsWith("#")) continue;
-      const match = /^(\S+)\s*=?\s*(.*)$/.exec(line);
+      // "Keyword value", "Keyword=value" and "Keyword = value" are all valid.
+      const match = /^([^\s=]+)[\s=]+(.*)$/.exec(line);
       if (!match) continue;
       const keyword = match[1]!.toLowerCase();
       const args = match[2]!.split(/\s+/).filter(Boolean);
