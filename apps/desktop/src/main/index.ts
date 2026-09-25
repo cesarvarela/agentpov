@@ -62,6 +62,10 @@ function createWindow(): BrowserWindow {
 }
 
 app.whenReady().then(() => {
+  // Packaged builds get build/icon.icns from electron-builder; dev runs inside
+  // the stock Electron.app, so swap its dock icon for ours.
+  if (isDev) app.dock?.setIcon(join(__dirname, "../../build/icon.png"));
+
   ipcMain.handle("app:getName", () => "agentview");
 
   ipcMain.handle("dialog:openFolder", async (event): Promise<string | null> => {
