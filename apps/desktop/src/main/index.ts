@@ -20,6 +20,7 @@ import {
 } from "./backends";
 import { startAskpass, stopAskpass } from "./ssh/askpass";
 import { listSshHosts } from "./ssh/config";
+import { PromptBroker } from "./ssh/prompts";
 
 const isDev = !app.isPackaged;
 
@@ -101,44 +102,20 @@ app.whenReady().then(() => {
       openRemote(event.sender.id, host, folder),
   );
 
-  const prompts = new Map<number, (value: string | null) => void>();
+  const prompts = new PromptBroker();
 
-  ipcMain.handle("ssh:answer", (_event, id: number, value: string | null) => {
-    prompts.get(id)?.(value);
-  });
-
-  startAskpass(
-    (prompt: SshPrompt, windowId) =>
-      new Promise<string | null>((resolve) => {
-        const requester = windowId === null ? undefined : webContents.fromId(windowId);
-        const contents =
-          (requester && !requester.isDestroyed() ? requester : undefined) ??
-          (BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0])?.webContents;
-        if (!contents) {
-          resolve(null);
-          return;
-        }
-
-        // A prompt nobody can answer any more is a cancel; otherwise ssh (and
-        // every later connect to that host) would wait on it forever.
-        const cancel = () => settle(null);
-        const onNavigate = (details: { isSameDocument: boolean; isMainFrame: boolean }) => {
-          if (details.isMainFrame && !details.isSameDocument) cancel();
-        };
-        const settle = (value: string | null) => {
-          prompts.delete(prompt.id);
-          contents.off("destroyed", cancel);
-          contents.off("render-process-gone", cancel);
-          contents.off("did-start-navigation", onNavigate);
-          resolve(value);
-        };
-        contents.once("destroyed", cancel);
-        contents.once("render-process-gone", cancel);
-        contents.on("did-start-navigation", onNavigate);
-        prompts.set(prompt.id, settle);
-        contents.send("ssh:prompt", prompt);
-      }),
+  ipcMain.handle("ssh:answer", (_event, id: number, value: string | null) =>
+    prompts.answer(id, value),
   );
+
+  // Prompts go to the window that started the connection, else the focused one.
+  startAskpass((prompt: SshPrompt, windowId) => {
+    const requester = windowId === null ? undefined : webContents.fromId(windowId);
+    const target =
+      (requester && !requester.isDestroyed() ? requester : undefined) ??
+      (BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0])?.webContents;
+    return prompts.ask(target, prompt);
+  });
 
   ipcMain.handle(
     "fs:listTree",

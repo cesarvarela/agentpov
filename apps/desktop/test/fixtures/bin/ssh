@@ -1,0 +1,14 @@
+#!/bin/sh
+# Stand-in for ssh in tests: runs the remote command with the local /bin/sh.
+# `ssh -O exit host` (closing the control master) is a no-op.
+# STUB_BANNER prints a login banner first; STUB_FAIL fails like a refused login.
+for arg; do
+  [ "$arg" = "-O" ] && exit 0
+  last="$arg"
+done
+if [ -n "$STUB_FAIL" ]; then
+  echo "$STUB_FAIL" >&2
+  exit 255
+fi
+[ -n "$STUB_BANNER" ] && echo "$STUB_BANNER"
+exec /bin/sh -c "$last"

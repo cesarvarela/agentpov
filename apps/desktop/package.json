@@ -15,7 +15,9 @@
     "dist": "electron-vite build && electron-builder --mac --publish never",
     "dist:unsigned": "electron-vite build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --publish never -c.mac.identity=null -c.mac.notarize=false",
     "make-icon": "electron scripts/make-icon.cjs",
-    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "echo \"(no linter configured for @agentpov/desktop)\""
   },
   "devDependencies": {
@@ -36,6 +38,7 @@
     "remark-gfm": "^4.0.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
-    "vite": "^7.3.6"
+    "vite": "^7.3.6",
+    "vitest": "^3.2.7"
   }
 }
