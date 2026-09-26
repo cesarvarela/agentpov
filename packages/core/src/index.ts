@@ -1,5 +1,6 @@
 export * from "./types.js";
 export { createNodeFileSystem } from "./node-fs.js";
+export { globToRegExp } from "./glob.js";
 
 import { managedDirFor, type ResolveRun } from "./context.js";
 import { collectAgents, collectMcpServers, collectSkills } from "./discovery.js";

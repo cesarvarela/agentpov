@@ -1,8 +1,12 @@
 #!/usr/bin/env node
-// Builds a throwaway project that exercises every config surface agentpov
-// resolves, so validate-app has something rich to check. Build it outside the
-// repo (the scratchpad) — inside, its CLAUDE.md and skills would show up in
-// agentpov's own view.
+// Builds a project that exercises every config surface agentpov resolves, so
+// validate-app has something rich to check. The committed copy lives in
+// fixtures/kitchen-sink (hidden from agentview's own tree by .agentpovignore);
+// rerun this to regenerate it after changing what it covers.
+//
+// Inside another git repo it stays a plain folder, so Claude Code sees it as a
+// subfolder of that repo: ancestor CLAUDE.md files and the repo's auto-memory
+// apply. Build it outside any repo to get it as a standalone project.
 //
 // Every hook only appends its event name to <dest>/.hooks.log, and every MCP
 // server points at nothing, so running an agent here is harmless. Each file
@@ -136,5 +140,11 @@ write("FIXTURE.md", md([
 ]));
 write(".gitignore", ".hooks.log\n");
 
-execFileSync("git", ["init", "-q"], { cwd: dest });
+let insideRepo = true;
+try {
+  execFileSync("git", ["rev-parse", "--is-inside-work-tree"], { cwd: dest, stdio: "ignore" });
+} catch {
+  insideRepo = false;
+}
+if (!insideRepo) execFileSync("git", ["init", "-q"], { cwd: dest });
 console.log(dest);

@@ -1,0 +1,87 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm test:*)",
+      "Read(./src/**)"
+    ],
+    "ask": [
+      "Edit(./src/api/**)"
+    ],
+    "deny": [
+      "Read(./secrets/**)",
+      "Bash(git push:*)",
+      "Edit(./.env)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo SessionStart >> \"$CLAUDE_PROJECT_DIR/.hooks.log\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo UserPromptSubmit >> \"$CLAUDE_PROJECT_DIR/.hooks.log\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo PreToolUse:Read >> \"$CLAUDE_PROJECT_DIR/.hooks.log\""
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo PreToolUse:Edit|Write >> \"$CLAUDE_PROJECT_DIR/.hooks.log\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo PostToolUse:* >> \"$CLAUDE_PROJECT_DIR/.hooks.log\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo Stop >> \"$CLAUDE_PROJECT_DIR/.hooks.log\""
+          }
+        ]
+      }
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "approved-stdio",
+    "approved-http"
+  ],
+  "disabledMcpjsonServers": [
+    "blocked"
+  ]
+}

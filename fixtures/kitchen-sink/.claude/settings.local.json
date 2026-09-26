@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(./secrets/public.txt)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo PostToolUse:Edit(local) >> \"$CLAUDE_PROJECT_DIR/.hooks.log\""
+          }
+        ]
+      }
+    ]
+  }
+}

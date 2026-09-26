@@ -18,6 +18,7 @@ import {
   openRemote,
   resetToLocal,
 } from "./backends";
+import { pruneIgnored } from "./ignore";
 import { startAskpass, stopAskpass } from "./ssh/askpass";
 import { listSshHosts } from "./ssh/config";
 import { PromptBroker } from "./ssh/prompts";
@@ -119,8 +120,10 @@ app.whenReady().then(() => {
 
   ipcMain.handle(
     "fs:listTree",
-    (event, folder: string): Promise<FileNode> =>
-      backendFor(event.sender.id).listTree(folder),
+    async (event, folder: string): Promise<FileNode> => {
+      const backend = backendFor(event.sender.id);
+      return pruneIgnored(await backend.listTree(folder), folder, backend.fs);
+    },
   );
 
   ipcMain.handle(

@@ -22,12 +22,19 @@ its docs.
 - `target`: file or directory inside it — what you'd select in the app's
   file tree. Default: the folder itself.
 
-One target proves little. For a full check, build the fixture — a throwaway
-project with every surface the app resolves, harmless hooks and dead MCP
-servers — and run its targets (listed in its `FIXTURE.md`):
+One target proves little. For a full check, use the fixture in
+`fixtures/kitchen-sink` — a project with every surface the app resolves,
+hooks that only log to `.hooks.log`, and MCP servers that never connect —
+and run the targets listed in its `FIXTURE.md`. `.agentpovignore` hides
+`fixtures/` from agentview's own tree.
+
+Because it sits inside this repo, Claude Code also sees this repo's
+`CLAUDE.md` and auto-memory from there. Those rows are real app gaps (the app
+doesn't look above the opened folder), not fixture noise. For a standalone
+copy, or to regenerate the committed one after changing what it covers:
 
 ```bash
-node .claude/skills/validate-app/scripts/make-fixture.mjs <scratchpad>/kitchen-sink --force
+node .claude/skills/validate-app/scripts/make-fixture.mjs <dest> --force
 ```
 
 For a real project, unless the user named a target, run at least:

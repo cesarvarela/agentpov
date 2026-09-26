@@ -1,0 +1,4 @@
+# Paths agentpov hides from its file tree (gitignore-style).
+
+# Fixture projects: open them as their own project instead.
+fixtures/

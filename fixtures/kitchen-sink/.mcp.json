@@ -1,0 +1,32 @@
+{
+  "mcpServers": {
+    "approved-stdio": {
+      "command": "node",
+      "args": [
+        "-e",
+        "process.exit(0)"
+      ],
+      "env": {
+        "FIXTURE": "1"
+      }
+    },
+    "approved-http": {
+      "type": "http",
+      "url": "http://127.0.0.1:9/mcp",
+      "headers": {
+        "X-Fixture": "1"
+      }
+    },
+    "blocked": {
+      "command": "node",
+      "args": [
+        "-e",
+        "process.exit(0)"
+      ]
+    },
+    "pending": {
+      "type": "sse",
+      "url": "http://127.0.0.1:9/sse"
+    }
+  }
+}
