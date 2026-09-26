@@ -14,7 +14,16 @@
 // was started in, and every MCP server points at nothing, so running an agent
 // here is harmless. Each file says in its own text what it is there to test.
 //
-// Usage: node make-fixture.mjs <dest> [--nested] [--force]
+// --agents-md builds a project with no CLAUDE.md at all, only AGENTS.md files,
+// which Claude Code 2.1.277+ reads in their place.
+//
+// --config <dir> also builds an isolated Claude Code user config at <dir>, to
+// pass as CLAUDE_CONFIG_DIR (adapter and app-view take --config-dir <dir>):
+// a local marketplace with one installed plugin that ships every component
+// kind, a user skills-dir plugin, and user settings. It runs `claude plugin`
+// with CLAUDE_CONFIG_DIR=<dir>, so the real ~/.claude is never touched.
+//
+// Usage: node make-fixture.mjs <dest> [--nested | --agents-md] [--config <dir>] [--force]
 
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -23,9 +32,12 @@ import { dirname, join, resolve } from "node:path";
 const args = process.argv.slice(2);
 const force = args.includes("--force");
 const nested = args.includes("--nested");
-const destArg = args.find((a) => !a.startsWith("--"));
-if (!destArg) {
-  console.error("usage: node make-fixture.mjs <dest> [--nested] [--force]");
+const agentsMd = args.includes("--agents-md");
+const configAt = args.indexOf("--config");
+const configArg = configAt >= 0 ? args[configAt + 1] : undefined;
+const destArg = args.find((a, i) => !a.startsWith("--") && args[i - 1] !== "--config");
+if (!destArg || (configAt >= 0 && !configArg)) {
+  console.error("usage: node make-fixture.mjs <dest> [--nested | --agents-md] [--config <dir>] [--force]");
   process.exit(1);
 }
 const root = resolve(destArg);
@@ -48,6 +60,32 @@ const md = (lines) => lines.join("\n") + "\n";
 const skill = (name, description, extra = []) =>
   md(["---", `name: ${name}`, `description: ${description}`, ...extra, "---", "", `# ${name}`, "", description]);
 const log = (event) => `echo ${event} >> "$CLAUDE_PROJECT_DIR/.hooks.log"`;
+
+if (agentsMd) {
+  // Instructions only in AGENTS.md: Claude Code reads them because there is
+  // no CLAUDE.md, .claude/CLAUDE.md or CLAUDE.local.md here or above.
+  write("AGENTS.md", md(["# agents-md", "", "Fixture: root AGENTS.md, read in place of a CLAUDE.md.", "", "Shared: @docs/shared.md"]));
+  write("docs/shared.md", md(["Fixture: imported by the root AGENTS.md."]));
+  write(".claude/AGENTS.md", md(["Fixture: .claude/AGENTS.md, also read at start."]));
+  write(".claude/rules/always.md", md(["Fixture: rule, loads alongside AGENTS.md."]));
+  write("AGENTS.override.md", md(["Fixture: Codex-only override. Claude Code never reads it."]));
+  write("AGENTS.local.md", md(["Fixture: not read by Claude Code."]));
+  write(".agents/AGENTS.md", md(["Fixture: under .agents/, not read by Claude Code."]));
+  write("pkg/AGENTS.md", md(["Fixture: pkg/AGENTS.md, loads when a file in pkg/ is read."]));
+  write("pkg/index.ts", "// Fixture: target. Reading it should pull in pkg/AGENTS.md.\nexport const x = 1;\n");
+  write("mixed/CLAUDE.md", md(["Fixture: mixed/ has its own CLAUDE.md, so its AGENTS.md stays out."]));
+  write("mixed/AGENTS.md", md(["Fixture: shadowed by mixed/CLAUDE.md on read."]));
+  write("mixed/index.ts", "// Fixture: target. mixed/CLAUDE.md loads, mixed/AGENTS.md doesn't.\nexport const y = 1;\n");
+  write("FIXTURE.md", md([
+    "# agents-md fixture",
+    "",
+    "Targets: the folder, pkg/index.ts, mixed/index.ts.",
+  ]));
+  execFileSync("git", ["init", "-q"], { cwd: root });
+  if (configArg) buildConfig(resolve(configArg));
+  console.log(dest);
+  process.exit(0);
+}
 
 // Instructions: every location, an @import, rules with and without paths:,
 // and a nested CLAUDE.md that only loads on read.
@@ -95,12 +133,21 @@ write(".claude/settings.json", {
     PostToolUse: [{ matcher: "*", hooks: [{ type: "command", command: log("PostToolUse:*") }] }],
     Stop: [{ hooks: [{ type: "command", command: log("Stop") }] }],
   },
-  enabledMcpjsonServers: ["approved-stdio", "approved-http"],
+  enabledMcpjsonServers: ["approved-stdio", "approved-http", "denied-by-policy"],
   disabledMcpjsonServers: ["blocked"],
+  // Approved above, but the denylist wins.
+  deniedMcpServers: [{ serverName: "denied-by-policy" }],
   claudeMdExcludes: ["**/src/legacy/CLAUDE.md"],
+  // Only Bash is sandboxed; the app shows what sandboxed Bash can do to the target.
+  sandbox: {
+    enabled: true,
+    filesystem: { denyWrite: ["./src/legacy"], denyRead: ["./secrets/key.txt"] },
+    network: { allowedDomains: ["example.com"] },
+  },
 });
 write(".claude/settings.local.json", {
   permissions: { allow: ["Read(./secrets/public.txt)"] },
+  outputStyle: "Terse",
   hooks: {
     PostToolUse: [{ matcher: "Edit", hooks: [{ type: "command", command: log("PostToolUse:Edit(local)") }] }],
   },
@@ -113,6 +160,7 @@ write(".mcp.json", {
     "approved-http": { type: "http", url: "http://127.0.0.1:9/mcp", headers: { "X-Fixture": "1" } },
     blocked: { command: "node", args: ["-e", "process.exit(0)"] },
     pending: { type: "sse", url: "http://127.0.0.1:9/sse" },
+    "denied-by-policy": { command: "node", args: ["-e", "process.exit(0)"] },
   },
 });
 
@@ -138,6 +186,49 @@ write(".claude/agents/reviewer.md", md([
 ]));
 write(".claude/commands/legacy-cmd.md", md(["Fixture: legacy .claude/commands entry."]));
 write(".claude/commands/tools/deep-cmd.md", md(["Fixture: command in a subfolder, named tools:deep-cmd."]));
+
+// Frontmatter hooks: a skill's run once it is invoked, a subagent's only while
+// it runs (its Stop registers as SubagentStop).
+write(".claude/skills/hooked/SKILL.md", md([
+  "---",
+  "name: hooked",
+  "description: Fixture skill that declares its own hooks.",
+  "hooks:",
+  "  PostToolUse:",
+  "    - matcher: Edit|Write",
+  "      hooks:",
+  "        - type: command",
+  `          command: ${log("Skill:PostToolUse")}`,
+  "---",
+  "Fixture.",
+]));
+write(".claude/agents/hooked-agent.md", md([
+  "---",
+  "name: hooked-agent",
+  "description: Fixture subagent with frontmatter hooks.",
+  "hooks:",
+  "  Stop:",
+  "    - hooks:",
+  "        - type: command",
+  `          command: ${log("Agent:Stop")}`,
+  "---",
+  "Fixture.",
+]));
+
+// Output styles and workflows.
+write(".claude/output-styles/terse.md", md([
+  "---",
+  "name: Terse",
+  "description: Fixture output style, selected in local settings.",
+  "keep-coding-instructions: true",
+  "---",
+  "Answer in as few words as possible.",
+]));
+write(".claude/workflows/release.js", [
+  "export const meta = { name: 'release', description: 'Fixture workflow.' }",
+  "await agent('noop')",
+  "",
+].join("\n"));
 
 write("FIXTURE.md", md([
   "# kitchen-sink fixture",
@@ -174,4 +265,65 @@ if (nested) {
 }
 
 execFileSync("git", ["init", "-q"], { cwd: root });
+if (configArg) buildConfig(resolve(configArg));
 console.log(dest);
+
+/**
+ * An isolated CLAUDE_CONFIG_DIR: user settings, a user skills-dir plugin, and
+ * a local marketplace whose one plugin ships skills, commands, agents, hooks,
+ * MCP servers, output styles and workflows, installed with the real CLI.
+ */
+function buildConfig(config) {
+  if (existsSync(config)) {
+    if (!force) {
+      console.error(`${config} exists; pass --force to replace it`);
+      process.exit(1);
+    }
+    rmSync(config, { recursive: true, force: true });
+  }
+  const market = `${config}-marketplace`;
+  rmSync(market, { recursive: true, force: true });
+  const inMarket = writeIn(market);
+  inMarket(".claude-plugin/marketplace.json", {
+    name: "fixture-mkt",
+    owner: { name: "fixture" },
+    plugins: [
+      { name: "kit", source: "./plugins/kit", description: "Fixture plugin with every component." },
+      { name: "off-kit", source: "./plugins/off-kit", description: "Fixture plugin, installed then disabled." },
+    ],
+  });
+  const kit = writeIn(join(market, "plugins/kit"));
+  kit(".claude-plugin/plugin.json", { name: "kit", version: "1.0.0", description: "Fixture plugin." });
+  kit("skills/kit-skill/SKILL.md", skill("kit-skill", "Fixture: plugin skill."));
+  kit("commands/kit-cmd.md", md(["Fixture: plugin command."]));
+  kit("agents/kit-agent.md", md(["---", "name: kit-agent", "description: Fixture: plugin subagent.", "---", "Fixture."]));
+  kit("agents/team/deep-agent.md", md(["---", "name: deep-agent", "description: Fixture: plugin subagent in a subfolder.", "---", "Fixture."]));
+  kit("hooks/hooks.json", {
+    hooks: {
+      SessionStart: [{ hooks: [{ type: "command", command: "echo Plugin:SessionStart >> \"${CLAUDE_PLUGIN_ROOT}/.hooks.log\"" }] }],
+    },
+  });
+  kit(".mcp.json", { mcpServers: { "kit-server": { command: "node", args: ["${CLAUDE_PLUGIN_ROOT}/never.js"] } } });
+  kit("output-styles/kit-style.md", md(["---", "name: kit-style", "description: Fixture: plugin output style.", "---", "Fixture."]));
+  kit("workflows/kit-flow.js", "export const meta = { name: 'kit-flow', description: 'Fixture plugin workflow.' }\n");
+  const offKit = writeIn(join(market, "plugins/off-kit"));
+  offKit(".claude-plugin/plugin.json", { name: "off-kit", version: "1.0.0" });
+  offKit("skills/off-skill/SKILL.md", skill("off-skill", "Fixture: from a disabled plugin, never loads."));
+
+  const env = { ...process.env, CLAUDE_CONFIG_DIR: config };
+  const cli = (...cliArgs) => execFileSync("claude", cliArgs, { env, stdio: "pipe" });
+  mkdirSync(config, { recursive: true });
+  cli("plugin", "marketplace", "add", market);
+  cli("plugin", "install", "kit@fixture-mkt", "--scope", "user");
+  cli("plugin", "install", "off-kit@fixture-mkt", "--scope", "user");
+  cli("plugin", "disable", "off-kit@fixture-mkt", "--scope", "user");
+
+  const user = writeIn(config);
+  user("skills/user-skill/SKILL.md", skill("user-skill", "Fixture: personal skill in the isolated config."));
+  user("skills/user-kit/.claude-plugin/plugin.json", { name: "user-kit", version: "0.1.0" });
+  user("skills/user-kit/skills/ukit-skill/SKILL.md", skill("ukit-skill", "Fixture: skill from a user skills-dir plugin."));
+  user("agents/user-agent.md", md(["---", "name: user-agent", "description: Fixture: user subagent.", "---", "Fixture."]));
+  user("CLAUDE.md", md(["Fixture: user CLAUDE.md in the isolated config."]));
+  user("output-styles/user-style.md", md(["---", "name: user-style", "description: Fixture: user output style.", "---", "Fixture."]));
+  user("workflows/user-flow.js", "export const meta = { name: 'user-flow', description: 'Fixture user workflow.' }\n");
+}
