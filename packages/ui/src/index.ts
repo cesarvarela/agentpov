@@ -12,3 +12,4 @@ export {
   CardHeader,
   CardTitle,
 } from "./components/ui/card";
+export { AGENTS, type Agent } from "./agents";

@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { AGENTS } from "@agentpov/ui";
 
 import type { RecentProject } from "../lib/recents";
 import {
@@ -10,8 +11,6 @@ import { ProjectSwitcher } from "./ProjectSwitcher";
 
 const DRAG = { WebkitAppRegion: "drag" } as CSSProperties;
 const NO_DRAG = { WebkitAppRegion: "no-drag" } as CSSProperties;
-
-const AGENTS = ["Claude Code", "Codex", "Cursor", "Gemini CLI"] as const;
 
 interface TopBarProps {
   appName: string;
@@ -65,16 +64,16 @@ export function TopBar({
         style={NO_DRAG}
       >
         {AGENTS.map((agent) => {
-          const active = agent === "Claude Code" && Boolean(folder);
+          const active = agent.id === "claude-code" && Boolean(folder);
           return (
             <button
-              key={agent}
+              key={agent.id}
               type="button"
               disabled={!active}
               title={
-                agent === "Claude Code"
+                agent.supported
                   ? undefined
-                  : `${agent} support is not built yet`
+                  : `${agent.name} support is not built yet`
               }
               className={
                 active
@@ -84,7 +83,7 @@ export function TopBar({
                   : "text-om-muted flex h-6 cursor-default items-center rounded-[4px] px-2.5 text-xs opacity-70"
               }
             >
-              <span>{agent}</span>
+              <span>{agent.name}</span>
             </button>
           );
         })}
