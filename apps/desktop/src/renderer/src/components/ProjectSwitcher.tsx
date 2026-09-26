@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 
-import { displayPath } from "../lib/paths";
+import { compactPath } from "../lib/paths";
 import type { RecentProject } from "../lib/recents";
 import { ChevronDownIcon, FolderIcon, ServerIcon } from "./Icons";
 
@@ -22,7 +22,7 @@ export function HostBadge({ host, icon = true }: { host: string; icon?: boolean 
 }
 
 export function recentLabel(entry: RecentProject): string {
-  return displayPath(entry.path, null, entry.host ? (entry.homeDir ?? "") : localHome);
+  return compactPath(entry.path, entry.host ? (entry.homeDir ?? "") : localHome);
 }
 
 /**
@@ -126,8 +126,8 @@ export function ProjectSwitcher({
         onClick={() => setOpen((value) => !value)}
         aria-haspopup="menu"
         aria-expanded={open}
-        title={folder ? "Switch project" : "Open a project"}
-        className={`text-om-muted hover:text-om-text hover:bg-om-raised flex h-7 min-w-0 max-w-full cursor-pointer items-center gap-2 rounded-md px-2 font-mono text-xs transition-colors ${
+        title={folder ? `${folder}\nSwitch project` : "Open a project"}
+        className={`text-om-muted hover:text-om-text hover:bg-om-raised flex h-7 min-w-0 max-w-full cursor-pointer lg:max-w-[36rem] items-center gap-2 rounded-md px-2 font-mono text-xs transition-colors ${
           open ? "bg-om-raised text-om-text" : ""
         }`}
       >

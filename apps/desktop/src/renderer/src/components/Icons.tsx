@@ -246,6 +246,47 @@ export function ExternalLinkIcon(props: IconProps) {
   );
 }
 
+/** A plug: installed plugins. */
+export function PluginIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M6 2.25v3M10 2.25v3" />
+      <path d="M4.25 5.25h7.5v2.5a3.75 3.75 0 01-7.5 0z" />
+      <path d="M8 11.5v2.25" />
+    </Icon>
+  );
+}
+
+/** A box around a prompt: the Bash sandbox. */
+export function SandboxIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="2.25" y="2.75" width="11.5" height="10.5" rx="1.5" />
+      <path d="M5 6.5l2 1.5-2 1.5M8.5 10h2.5" />
+    </Icon>
+  );
+}
+
+/** Two linked steps: saved workflows. */
+export function FlowIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="2.25" y="2.25" width="4.5" height="4.5" rx="1" />
+      <rect x="9.25" y="9.25" width="4.5" height="4.5" rx="1" />
+      <path d="M4.5 6.75v2.5a2.25 2.25 0 002.25 2.25h2.5" />
+    </Icon>
+  );
+}
+
+/** A speech bubble: output styles, how the agent talks. */
+export function StyleIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M2.75 4.25a1.5 1.5 0 011.5-1.5h7.5a1.5 1.5 0 011.5 1.5v5a1.5 1.5 0 01-1.5 1.5H7l-3 2.5v-2.5h0a1.25 1.25 0 01-1.25-1.25z" />
+    </Icon>
+  );
+}
+
 /**
  * 12px base for the loading-mode glyphs. Smaller than `Icon` and filled rather
  * than stroked, so the three modes read as one family: solid, half, dashed.

@@ -1,6 +1,8 @@
 import type {
   ConfigLayer,
+  EffectiveValue,
   HookEntry,
+  InstructionFilesMode,
   MemoryEntry,
   PermissionDecision,
   PermissionRule,
@@ -14,20 +16,61 @@ export function layerLabel(layer: ConfigLayer): string {
 }
 
 /**
- * Instruction files: every CLAUDE.md, every `.claude/rules` file and the
- * `@imports` they pull in. Rules sit here rather than in the Memory panel —
- * they are authored instructions that load at launch (or on read, when they
- * declare `paths:`), not recalled memory.
+ * Instruction files: every CLAUDE.md and AGENTS.md, every `.claude/rules`
+ * file, the `@imports` they pull in, and the managed `claudeMd` text. Rules sit
+ * here rather than in the Memory panel — they are authored instructions that
+ * load at launch (or on read, when they declare `paths:`), not recalled memory.
  */
 export function instructionEntries(ctx: ResolvedContext): MemoryEntry[] {
-  return (
-    ctx.memory.filter(
-      (entry) =>
-        entry.kind === "claude-md" ||
-        entry.kind === "rule" ||
-        entry.kind === "import",
-    )
+  return ctx.memory.filter(
+    (entry) =>
+      entry.kind === "claude-md" ||
+      entry.kind === "agents-md" ||
+      entry.kind === "inline" ||
+      entry.kind === "rule" ||
+      entry.kind === "import",
   );
+}
+
+/**
+ * Instruction files counted as files in panel notes: CLAUDE.md, AGENTS.md,
+ * rules and the managed `claudeMd` text. Imports are counted inside the file
+ * that pulls them in.
+ */
+export function isInstructionFile(entry: MemoryEntry): boolean {
+  return (
+    entry.kind === "claude-md" ||
+    entry.kind === "agents-md" ||
+    entry.kind === "inline" ||
+    entry.kind === "rule"
+  );
+}
+
+/** Claude Code's default for `instructionFiles`. */
+export const DEFAULT_INSTRUCTION_FILES: InstructionFilesMode =
+  "claude-md-or-agents-md";
+
+/** What each `instructionFiles` mode means, in a few words. */
+export const INSTRUCTION_FILES_LABEL: Record<InstructionFilesMode, string> = {
+  "claude-md-or-agents-md": "CLAUDE.md, else AGENTS.md",
+  "claude-md-and-agents-md": "CLAUDE.md and AGENTS.md",
+  "claude-md": "CLAUDE.md only, AGENTS.md ignored",
+  "managed-only": "managed instructions only",
+};
+
+/** The empty-state line for the Instructions panel, worded for the mode. */
+export function noInstructionsText(
+  ctx: ResolvedContext | null,
+  target: "file" | "folder",
+): string {
+  const mode = ctx?.effective?.instructionFiles.value ?? DEFAULT_INSTRUCTION_FILES;
+  const files =
+    mode === "claude-md"
+      ? "CLAUDE.md"
+      : mode === "managed-only"
+        ? "managed instruction"
+        : "CLAUDE.md or AGENTS.md";
+  return `No ${files} applies to this ${target}.`;
 }
 
 /** Just the `.claude/rules` files, in precedence order. */
@@ -157,14 +200,36 @@ export function ruleTargetsFolder(
 const DECISION_STRENGTH: PermissionDecision[] = ["deny", "ask", "allow"];
 
 /**
+ * Tools a matching `Read(path)` deny also blocks (docs: /permissions, "Read
+ * and Edit"). Mirrors core's `BLOCKED_BY_READ_DENY`.
+ */
+const BLOCKED_BY_READ_DENY = new Set(["Edit", "Write"]);
+
+/** A `Read(path)` deny that hits the target, so it blocks edits there too. */
+function isPathReadDeny(rule: PermissionRule): boolean {
+  return (
+    rule.tool === "Read" &&
+    rule.decision === "deny" &&
+    rule.specifier !== undefined &&
+    rule.matchesFile
+  );
+}
+
+/**
  * Do two rules compete for the selected target? Mirrors core's `competes`: the
  * same tool, and either both hit the target or the rule text is identical (for
- * tools whose specifier is not a path).
+ * tools whose specifier is not a path); across tools, a `Read(path)` deny that
+ * hits the target competes with an Edit/Write rule that hits it too.
  */
 function competes(a: PermissionRule, b: PermissionRule): boolean {
-  if (a.tool !== b.tool) return false;
+  if (a.ignored || b.ignored) return false;
+  if (a.tool !== b.tool) {
+    return (
+      isPathReadDeny(b) && BLOCKED_BY_READ_DENY.has(a.tool) && a.matchesFile
+    );
+  }
   if (a.matchesFile && b.matchesFile) return true;
-  return a.rule === b.rule;
+  return a.rule === b.rule && !a.carvedOutBy && !b.carvedOutBy;
 }
 
 /**
@@ -189,10 +254,38 @@ export function overridingDecisionFor(
   );
 }
 
-/** Rules that apply to the selected file and have not been overridden. */
+/**
+ * A rule Claude Code actually evaluates: not dropped outright (`ignored`, e.g.
+ * a non-managed rule under `allowManagedPermissionRulesOnly`).
+ */
+export function isLiveRule(rule: PermissionRule): boolean {
+  return !rule.ignored;
+}
+
+/**
+ * Does `rule` take part in deciding a `tool` call on the target?
+ *
+ * - its own tool, always;
+ * - for Write, `Edit(path)` rules too: Claude Code checks file paths against
+ *   Edit and Read rules only (a `Write(path)` rule is `ignored`), and Edit
+ *   rules cover every built-in tool that edits files;
+ * - for Edit and Write, a `Read(path)` deny that hits the target, which blocks
+ *   edits on the same path.
+ */
+function decides(rule: PermissionRule, tool: string): boolean {
+  if (rule.tool === tool) return true;
+  if (tool === "Write" && rule.tool === "Edit") return true;
+  return BLOCKED_BY_READ_DENY.has(tool) && isPathReadDeny(rule);
+}
+
+/**
+ * Rules Claude Code evaluates for a `tool` call on the selected file: live
+ * (not `ignored`), hitting the target, and relevant to the tool. Overridden
+ * rules can stay in: the strongest decision wins either way.
+ */
 function liveRulesFor(ctx: ResolvedContext, tool: string): PermissionRule[] {
   return ctx.permissions.filter(
-    (rule) => rule.matchesFile && !rule.overridden && rule.tool === tool,
+    (rule) => isLiveRule(rule) && rule.matchesFile && decides(rule, tool),
   );
 }
 
@@ -213,8 +306,9 @@ export function verdictFor(
 
 /**
  * The rule that decides the verdict for `tool` on the selected file: the first
- * live rule in deny → ask → allow order. Undefined when nothing matches, which
- * is the "ask" case with no rule behind it.
+ * live rule in deny → ask → allow order, preferring one written for the tool
+ * itself over one that reaches it from another tool. Undefined when nothing
+ * matches, which is the "ask" case with no rule behind it.
  */
 export function winningRuleFor(
   ctx: ResolvedContext,
@@ -222,7 +316,9 @@ export function winningRuleFor(
 ): PermissionRule | undefined {
   const rules = liveRulesFor(ctx, tool);
   for (const decision of DECISION_STRENGTH) {
-    const rule = rules.find((candidate) => candidate.decision === decision);
+    const candidates = rules.filter((candidate) => candidate.decision === decision);
+    const rule =
+      candidates.find((candidate) => candidate.tool === tool) ?? candidates[0];
     if (rule) return rule;
   }
   return undefined;
@@ -235,7 +331,11 @@ export function winningRuleFor(
  */
 export function matchingDenyRules(ctx: ResolvedContext): PermissionRule[] {
   return ctx.permissions.filter(
-    (rule) => rule.decision === "deny" && rule.matchesFile && !rule.overridden,
+    (rule) =>
+      isLiveRule(rule) &&
+      rule.decision === "deny" &&
+      rule.matchesFile &&
+      !rule.overridden,
   );
 }
 
@@ -243,14 +343,212 @@ export function firstMatchingDeny(
   ctx: ResolvedContext,
 ): PermissionRule | undefined {
   return ctx.permissions.find(
-    (rule) => rule.decision === "deny" && rule.matchesFile,
+    (rule) => isLiveRule(rule) && rule.decision === "deny" && rule.matchesFile,
   );
 }
 
 export function firstOverridden(
   ctx: ResolvedContext,
 ): PermissionRule | undefined {
-  return ctx.permissions.find((rule) => rule.overridden);
+  return ctx.permissions.find((rule) => isLiveRule(rule) && rule.overridden);
+}
+
+/** `3 skills` / `1 skill`. */
+export function plural(total: number, noun: string): string {
+  return `${total} ${noun}${total === 1 ? "" : "s"}`;
+}
+
+/**
+ * How an instruction entry is named in text: its path, except the managed
+ * `claudeMd` text, which has no file of its own and is named by its setting.
+ */
+export function instructionLabel(
+  entry: MemoryEntry,
+  folder: string,
+  homeDir: string,
+): string {
+  if (entry.kind === "inline") {
+    return `claudeMd in ${displayPath(entry.path, null, homeDir)}`;
+  }
+  return projectPath(entry.path, folder, homeDir);
+}
+
+/**
+ * What an enabled plugin brings into the session, counted from the entries
+ * that name it in their `plugin` field.
+ */
+export interface PluginContributions {
+  skills: number;
+  agents: number;
+  hooks: number;
+  mcpServers: number;
+  outputStyles: number;
+  workflows: number;
+}
+
+export function pluginContributions(
+  ctx: ResolvedContext,
+  plugin: string,
+): PluginContributions {
+  const mine = (entry: { plugin?: string }) => entry.plugin === plugin;
+  return {
+    skills: ctx.skills.filter(mine).length,
+    agents: ctx.agents.filter(mine).length,
+    hooks: ctx.hooks.filter(mine).length,
+    mcpServers: ctx.mcpServers.filter(mine).length,
+    outputStyles: (ctx.outputStyles ?? []).filter(mine).length,
+    workflows: (ctx.workflows ?? []).filter(mine).length,
+  };
+}
+
+/** `2 skills · 1 subagent · 3 hooks`, or null when it brings nothing. */
+export function contributionSummary(c: PluginContributions): string | null {
+  const parts = [
+    c.skills > 0 ? plural(c.skills, "skill") : null,
+    c.agents > 0 ? plural(c.agents, "subagent") : null,
+    c.hooks > 0 ? plural(c.hooks, "hook") : null,
+    c.mcpServers > 0 ? `${c.mcpServers} MCP` : null,
+    c.outputStyles > 0 ? plural(c.outputStyles, "output style") : null,
+    c.workflows > 0 ? plural(c.workflows, "workflow") : null,
+  ].filter((part): part is string => part !== null);
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+/** On disk but out of play: shadowed by a same-named entry, or turned off. */
+export function isOff(entry: {
+  shadowedBy?: unknown;
+  disabled?: string;
+}): boolean {
+  return entry.shadowedBy !== undefined || entry.disabled !== undefined;
+}
+
+/** An MCP server Claude Code will not start: disabled or blocked by policy. */
+export function isMcpOff(server: { state: string }): boolean {
+  return server.state === "disabled" || server.state === "blocked";
+}
+
+/**
+ * When a hook is registered, for the ones that aren't always on. Core's `note`
+ * wins; otherwise it is worded from the hook's source.
+ */
+export function hookScope(hook: HookEntry): string | null {
+  if (hook.note) return hook.note;
+  if (hook.source === "skill" && hook.owner) {
+    return `while skill ${hook.owner} is running`;
+  }
+  if (hook.source === "agent" && hook.owner) {
+    return `while subagent ${hook.owner} runs`;
+  }
+  return null;
+}
+
+/** `settings` hooks read as their layer; the others by what declares them. */
+export function hookOrigin(hook: HookEntry): string {
+  switch (hook.source) {
+    case "plugin":
+      return hook.plugin ? `plugin ${hook.plugin}` : "plugin";
+    case "skill":
+      return hook.owner ? `skill ${hook.owner}` : "skill";
+    case "agent":
+      return hook.owner ? `subagent ${hook.owner}` : "subagent";
+    default:
+      return `${layerLabel(hook.layer)} settings`;
+  }
+}
+
+/**
+ * One chip in the session settings row: a session-wide switch that changes
+ * what the panels mean. Only non-default values get one, except the
+ * permission mode, which every verdict depends on.
+ */
+export interface SessionSetting {
+  id: string;
+  label: string;
+  value: string;
+  setting: EffectiveValue<unknown>;
+}
+
+function isDefaultStyle(name: string): boolean {
+  return name.toLowerCase() === "default";
+}
+
+export function sessionSettings(ctx: ResolvedContext): SessionSetting[] {
+  const effective = ctx.effective;
+  if (!effective) return [];
+  const out: SessionSetting[] = [
+    {
+      id: "permissionMode",
+      label: "mode",
+      value: effective.permissionMode.value,
+      setting: effective.permissionMode,
+    },
+  ];
+  if (!isDefaultStyle(effective.outputStyle.value)) {
+    out.push({
+      id: "outputStyle",
+      label: "output style",
+      value: effective.outputStyle.value,
+      setting: effective.outputStyle,
+    });
+  }
+  if (effective.instructionFiles.value !== DEFAULT_INSTRUCTION_FILES) {
+    out.push({
+      id: "instructionFiles",
+      label: "instructions",
+      value: INSTRUCTION_FILES_LABEL[effective.instructionFiles.value],
+      setting: effective.instructionFiles,
+    });
+  }
+  if (!effective.autoMemory.value) {
+    out.push({
+      id: "autoMemory",
+      label: "auto memory",
+      value: "off",
+      setting: effective.autoMemory,
+    });
+  }
+  if (effective.disableAllHooks.value) {
+    out.push({
+      id: "disableAllHooks",
+      label: "hooks",
+      value: "all disabled",
+      setting: effective.disableAllHooks,
+    });
+  } else if (effective.allowManagedHooksOnly.value) {
+    out.push({
+      id: "allowManagedHooksOnly",
+      label: "hooks",
+      value: "managed only",
+      setting: effective.allowManagedHooksOnly,
+    });
+  }
+  if (!effective.workflows.value) {
+    out.push({
+      id: "workflows",
+      label: "workflows",
+      value: "off",
+      setting: effective.workflows,
+    });
+  }
+  return out;
+}
+
+/** Last segment of a settings key path: `permissions.defaultMode` → `defaultMode`. */
+export function settingKeyName(key: string): string {
+  const match = key.match(/([^.[\]"]+)["\]]*$/);
+  return match?.[1] ?? key;
+}
+
+/** `from ~/.claude/settings.json · note`, for tooltips and the export. */
+export function settingProvenance(
+  setting: EffectiveValue<unknown>,
+  folder: string,
+  homeDir: string,
+): string {
+  const where = setting.source
+    ? `${setting.key} in ${projectPath(setting.source.path, folder, homeDir)}`
+    : `${setting.key} not set, default`;
+  return setting.note ? `${where} · ${setting.note}` : where;
 }
 
 export interface EffectiveItem {
@@ -276,7 +574,11 @@ export function effectiveItems(
     items.push({
       title: "System & user instructions",
       detail: userInstructions
-        .map((entry) => displayPath(entry.path, null, homeDir))
+        .map((entry) =>
+          entry.kind === "inline"
+            ? instructionLabel(entry, ctx.folder, homeDir)
+            : displayPath(entry.path, null, homeDir),
+        )
         .join(", "),
     });
   }
@@ -284,7 +586,7 @@ export function effectiveItems(
   const rules = instructions.filter((entry) => entry.kind === "rule");
   if (rules.length > 0) {
     items.push({
-      title: `${rules.length} rule file${rules.length === 1 ? "" : "s"}`,
+      title: plural(rules.length, "rule file"),
       detail: rules
         .map((entry) => relativeTo(entry.path, ctx.folder) ?? displayPath(entry.path, null, homeDir))
         .join(", "),
@@ -294,14 +596,12 @@ export function effectiveItems(
   const projectInstructions = instructions.filter(
     (entry) =>
       (entry.layer === "project" || entry.layer === "local") &&
-      entry.kind === "claude-md",
+      (entry.kind === "claude-md" || entry.kind === "agents-md"),
   );
   const imports = instructions.filter((entry) => entry.kind === "import");
   if (projectInstructions.length > 0) {
     const importSuffix =
-      imports.length > 0
-        ? ` + ${imports.length} import${imports.length === 1 ? "" : "s"}`
-        : "";
+      imports.length > 0 ? ` + ${plural(imports.length, "import")}` : "";
     items.push({
       title: `Project instructions${importSuffix}`,
       detail: projectInstructions
@@ -316,8 +616,8 @@ export function effectiveItems(
     const files = memory.filter((entry) => entry.kind === "memory-file");
     items.push({
       title: index
-        ? `Memory index + ${files.length} memory file${files.length === 1 ? "" : "s"}`
-        : `${files.length} memory file${files.length === 1 ? "" : "s"}`,
+        ? `Memory index + ${plural(files.length, "memory file")}`
+        : plural(files.length, "memory file"),
       detail: displayPath(
         (index ?? files[0])?.path ?? "",
         null,
@@ -340,21 +640,43 @@ export function effectiveItems(
     });
   }
 
+  const style = (ctx.outputStyles ?? []).find((entry) => entry.active);
+  if (style) {
+    items.push({
+      title: `Output style: ${style.name}`,
+      detail: projectPath(style.path, ctx.folder, homeDir),
+    });
+  }
+
+  // Only what is actually in play counts; the rest is named as "off".
+  const skills = ctx.skills.filter((skill) => !isOff(skill));
+  const agents = ctx.agents.filter((agent) => !isOff(agent));
+  const servers = ctx.mcpServers.filter((server) => !isMcpOff(server));
+  const off =
+    ctx.skills.length -
+    skills.length +
+    (ctx.agents.length - agents.length) +
+    (ctx.mcpServers.length - servers.length);
   if (
     ctx.skills.length > 0 ||
     ctx.agents.length > 0 ||
     ctx.mcpServers.length > 0
   ) {
-    const mcpSource = ctx.mcpServers[0];
-    const detail =
-      ctx.mcpServers.length > 0 && mcpSource
-        ? `${relativeTo(mcpSource.path, ctx.folder) ?? displayPath(mcpSource.path, null, homeDir)} → ${ctx.mcpServers
-            .map((server) => server.name)
-            .join(", ")}`
-        : `${ctx.skills.length} skills, ${ctx.agents.length} subagents`;
+    const offSuffix = off > 0 ? ` (${off} more shadowed, disabled or blocked)` : "";
     items.push({
-      title: `Tool surface: ${ctx.skills.length} skills, ${ctx.agents.length} subagents, ${ctx.mcpServers.length} MCP servers`,
-      detail,
+      title: `Tool surface: ${plural(skills.length, "skill")}, ${plural(agents.length, "subagent")}, ${plural(servers.length, "MCP server")}${offSuffix}`,
+      detail:
+        servers.length > 0
+          ? servers.map((server) => server.name).join(", ")
+          : `${plural(skills.length, "skill")}, ${plural(agents.length, "subagent")}`,
+    });
+  }
+
+  const plugins = (ctx.plugins ?? []).filter((plugin) => plugin.enabled);
+  if (plugins.length > 0) {
+    items.push({
+      title: plural(plugins.length, "plugin"),
+      detail: plugins.map((plugin) => plugin.id).join(", "),
     });
   }
 
@@ -405,26 +727,37 @@ export function explainLines(
   return lines;
 }
 
+
 /** Markdown blob for the "Copy as context" button. */
 export function contextMarkdown(
   ctx: ResolvedContext,
   homeDir: string,
 ): string {
   const rel = relativeTo(ctx.file, ctx.folder) ?? ctx.file;
+  const where = (path: string) => projectPath(path, ctx.folder, homeDir);
   const lines: string[] = [
     `# Agent context for ${rel}`,
     "",
     `Folder: ${displayPath(ctx.folder, null, homeDir)}`,
     `File: ${rel}`,
-    "",
-    "## Instructions in context",
   ];
 
+  const session = sessionSettings(ctx);
+  if (session.length > 0) {
+    lines.push("", "## Session");
+    for (const item of session) {
+      lines.push(
+        `- ${item.label}: ${item.value} (${settingProvenance(item.setting, ctx.folder, homeDir)})`,
+      );
+    }
+  }
+
+  lines.push("", "## Instructions in context");
   const instructions = instructionEntries(ctx);
   if (instructions.length === 0) lines.push("- (none)");
   for (const entry of instructions) {
     lines.push(
-      `- [${layerLabel(entry.layer)}] ${projectPath(entry.path, ctx.folder, homeDir)} — ${entry.reason}`,
+      `- [${layerLabel(entry.layer)}] ${instructionLabel(entry, ctx.folder, homeDir)} — ${entry.reason}`,
     );
   }
 
@@ -441,8 +774,9 @@ export function contextMarkdown(
   if (ctx.permissions.length === 0) lines.push("- (none)");
   for (const rule of ctx.permissions) {
     const notes = [
+      rule.ignored ? `ignored: ${rule.ignored}` : null,
       rule.matchesFile ? "matches this file" : null,
-      rule.overridden
+      rule.overridden && !rule.ignored
         ? `overridden by ${overridingDecisionFor(ctx.permissions, rule) ?? "a stronger rule"} in ${
             rule.overriddenBy
               ? `${layerLabel(rule.overriddenBy).toLowerCase()} settings`
@@ -451,11 +785,9 @@ export function contextMarkdown(
         : null,
     ].filter(Boolean);
     lines.push(
-      `- ${rule.decision.toUpperCase()} ${rule.rule} [${layerLabel(rule.layer)}] ${projectPath(
-        rule.path,
-        ctx.folder,
-        homeDir,
-      )}${notes.length > 0 ? ` (${notes.join("; ")})` : ""}`,
+      `- ${rule.decision.toUpperCase()} ${rule.rule} [${layerLabel(rule.layer)}] ${where(rule.path)}${
+        notes.length > 0 ? ` (${notes.join("; ")})` : ""
+      }`,
     );
   }
 
@@ -463,8 +795,13 @@ export function contextMarkdown(
   const hooks = editHooks(ctx);
   if (hooks.length === 0) lines.push("- (none)");
   for (const hook of hooks) {
+    const notes = [
+      hookOrigin(hook),
+      hookScope(hook),
+      hook.disabled ? `disabled: ${hook.disabled}` : null,
+    ].filter(Boolean);
     lines.push(
-      `- ${hook.event}${hook.matcher ? ` (${hook.matcher})` : ""}: \`${hook.command}\` [${layerLabel(hook.layer)}]`,
+      `- ${hook.event}${hook.matcher ? ` (${hook.matcher})` : ""}: \`${hook.command}\` [${notes.join("; ")}]`,
     );
   }
 
@@ -473,10 +810,63 @@ export function contextMarkdown(
     "## Resolved verdicts",
     `- Edit(${rel}): ${verdictFor(ctx, "Edit").toUpperCase()}`,
     `- Read(${rel}): ${verdictFor(ctx, "Read").toUpperCase()}`,
+    `- Write(${rel}): ${verdictFor(ctx, "Write").toUpperCase()}`,
+  );
+
+  const sandbox = ctx.sandbox;
+  if (sandbox?.enabled.value) {
+    lines.push("", "## Bash sandbox (Bash commands only)");
+    if (sandbox.target) {
+      lines.push(
+        `- Bash read of ${rel}: ${sandbox.target.read.toUpperCase()}`,
+        `- Bash write to ${rel}: ${sandbox.target.write.toUpperCase()}`,
+        `- ${sandbox.target.reason}`,
+      );
+    }
+    for (const rule of sandbox.filesystem.filter((entry) => entry.matchesTarget)) {
+      lines.push(
+        `- ${rule.kind} ${rule.pattern} [${layerLabel(rule.layer)}] ${where(rule.path)}${
+          rule.fromPermission ? ` (from ${rule.fromPermission})` : ""
+        }`,
+      );
+    }
+  }
+
+  const plugins = ctx.plugins ?? [];
+  if (plugins.length > 0) {
+    lines.push("", "## Plugins");
+    for (const plugin of plugins) {
+      const brings = contributionSummary(pluginContributions(ctx, plugin.name));
+      lines.push(
+        `- ${plugin.enabled ? "ON" : "OFF"} ${plugin.id}${plugin.version ? ` ${plugin.version}` : ""} — ${plugin.reason}${
+          plugin.enabled && brings ? ` (${brings})` : ""
+        }`,
+      );
+    }
+  }
+
+  const liveSkills = ctx.skills.filter((skill) => !isOff(skill)).length;
+  const liveAgents = ctx.agents.filter((agent) => !isOff(agent)).length;
+  lines.push(
     "",
     "## Tool surface",
-    `- ${ctx.skills.length} skills, ${ctx.agents.length} subagents, ${ctx.mcpServers.length} MCP servers`,
+    `- ${plural(liveSkills, "skill")}, ${plural(liveAgents, "subagent")}, ${plural(
+      ctx.mcpServers.filter((server) => !isMcpOff(server)).length,
+      "MCP server",
+    )}`,
   );
+  for (const server of ctx.mcpServers.filter(isMcpOff)) {
+    lines.push(`- MCP ${server.name} ${server.state}: ${server.reason}`);
+  }
+  const style = (ctx.outputStyles ?? []).find((entry) => entry.active);
+  const styleName = style?.name ?? ctx.effective?.outputStyle.value;
+  if (styleName && !isDefaultStyle(styleName)) {
+    lines.push(`- output style: ${styleName}`);
+  }
+  const workflows = (ctx.workflows ?? []).filter((entry) => !isOff(entry));
+  if (workflows.length > 0) {
+    lines.push(`- ${plural(workflows.length, "workflow")}: ${workflows.map((entry) => entry.name).join(", ")}`);
+  }
 
   if (ctx.diagnostics.length > 0) {
     lines.push("", "## Diagnostics");

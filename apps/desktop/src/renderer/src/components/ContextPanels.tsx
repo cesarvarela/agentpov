@@ -3,24 +3,37 @@ import { Badge } from "@agentpov/ui";
 import type {
   AgentEntry,
   ConfigLayer,
+  EffectiveValue,
+  HookEntry,
   McpServerEntry,
   MemoryEntry,
   MemoryLoading,
+  OutputStyleEntry,
   PermissionDecision,
   PermissionRule,
+  PluginEntry,
+  ResolvedContext,
   SkillEntry,
   SkillSource,
   TargetKind,
+  WorkflowEntry,
 } from "@agentpov/core";
 
-import { layerLabel } from "../lib/derive";
+import type { SourceTarget } from "../hooks/useSource";
 import {
-  basename,
-  displayPath,
-  formatBytes,
-  projectPath,
-  relativeTo,
-} from "../lib/paths";
+  DEFAULT_INSTRUCTION_FILES,
+  INSTRUCTION_FILES_LABEL,
+  contributionSummary,
+  hookOrigin,
+  hookScope,
+  isMcpOff,
+  layerLabel,
+  pluginContributions,
+  sessionSettings,
+  settingKeyName,
+  settingProvenance,
+} from "../lib/derive";
+import { basename, formatBytes, relativeTo, rowPath } from "../lib/paths";
 import {
   ImportIcon,
   LoadAlwaysIcon,
@@ -267,7 +280,7 @@ export function InstructionRow({
         <Badge className="w-[52px] shrink-0 justify-center">import</Badge>
         <LoadingGlyph loading={entry.loading} reason={entry.reason} />
         <span className="text-om-muted min-w-0 flex-1 truncate font-mono text-xs">
-          {displayPath(entry.path, folder, homeDir)}
+          {rowPath(entry.path, folder, homeDir)}
         </span>
         <span className="text-om-muted shrink-0 text-[11px]">
           {entry.importedAtLine
@@ -280,9 +293,32 @@ export function InstructionRow({
     );
   }
 
+  // The managed `claudeMd` setting has no file of its own: the row names the
+  // setting and opens the managed settings file that holds it.
+  if (entry.kind === "inline") {
+    return (
+      <RowButton
+        active={active}
+        height="h-[30px]"
+        title={`${entry.reason}\n${entry.path}`}
+        onClick={onOpen}
+      >
+        <Badge className="w-[66px] shrink-0 justify-center">
+          {layerLabel(entry.layer)}
+        </Badge>
+        <LoadingGlyph loading={entry.loading} reason={entry.reason} />
+        <span className="text-om-text shrink-0 font-mono text-xs">claudeMd</span>
+        <span className="text-om-muted min-w-0 flex-1 truncate text-[11px]">
+          {entry.summary ?? `in ${basename(entry.path)}`}
+        </span>
+        <span className="text-om-muted shrink-0 text-[11px]">{size}</span>
+      </RowButton>
+    );
+  }
+
   const path = isDirectory
     ? (relativeTo(entry.path, folder) ?? entry.path)
-    : projectPath(entry.path, folder, homeDir);
+    : rowPath(entry.path, folder, homeDir);
 
   // A `.claude/rules` file with `paths:` only loads when Claude reads a file it
   // covers. The glyph already says "on read"; the second line says what for.
@@ -329,9 +365,25 @@ export function InstructionRow({
       <span className="text-om-text min-w-0 flex-1 truncate font-mono text-xs">
         {path}
       </span>
+      {entry.kind === "agents-md" ? (
+        <span className="text-om-muted shrink-0 text-[11px]" title={entry.reason}>
+          {agentsMdNote(entry.reason)}
+        </span>
+      ) : null}
       <span className="text-om-muted shrink-0 text-[11px]">{size}</span>
     </RowButton>
   );
+}
+
+/**
+ * Why an AGENTS.md is in context, in a few words: Claude Code reads it
+ * directly (not through an `@import`), either in place of a missing CLAUDE.md
+ * or next to it, depending on `instructionFiles`.
+ */
+function agentsMdNote(reason: string): string {
+  if (/instead of CLAUDE\.md/i.test(reason)) return "AGENTS.md, no CLAUDE.md here";
+  if (/after|alongside/i.test(reason)) return "AGENTS.md, after CLAUDE.md";
+  return "AGENTS.md";
 }
 
 /**
@@ -347,6 +399,13 @@ export function ruleNote(
   targetKind: TargetKind,
   strongerDecision?: PermissionDecision,
 ): { text: string; className: string } {
+  // Dropped before evaluation, so it neither wins nor loses anything.
+  if (rule.ignored) {
+    return { text: `ignored: ${rule.ignored}`, className: "text-om-muted" };
+  }
+  if (rule.carvedOutBy) {
+    return { text: `carved out by ${rule.carvedOutBy}`, className: "text-om-muted" };
+  }
   if (rule.overridden) {
     const where = rule.overriddenBy
       ? `${layerLabel(rule.overriddenBy).toLowerCase()} settings`
@@ -391,25 +450,27 @@ export function PermissionRow({
   onOpen: () => void;
 }) {
   const note = ruleNote(rule, targetKind, strongerDecision);
+  const outOfPlay = rule.overridden || rule.ignored !== undefined;
 
   return (
     <RowButton
       active={active}
+      dim={rule.ignored !== undefined}
       height="h-[30px]"
-      title={rule.path}
+      title={rule.ignored ? `ignored: ${rule.ignored}` : rule.path}
       onClick={onOpen}
     >
       <Badge
         variant={DECISION_VARIANT[rule.decision]}
         className={`w-[46px] shrink-0 justify-center ${
-          rule.overridden ? "opacity-50" : ""
+          rule.overridden && !rule.ignored ? "opacity-50" : ""
         }`}
       >
         {rule.decision}
       </Badge>
       <span
         className={`min-w-0 flex-1 truncate font-mono text-xs ${
-          rule.overridden ? "text-om-muted line-through" : "text-om-text"
+          outOfPlay ? "text-om-muted line-through" : "text-om-text"
         }`}
       >
         {rule.rule}
@@ -421,9 +482,12 @@ export function PermissionRow({
         className="text-om-muted shrink-0 truncate font-mono text-[11px]"
         title={rule.path}
       >
-        {projectPath(rule.path, folder, homeDir)}
+        {rowPath(rule.path, folder, homeDir)}
       </span>
-      <span className={`shrink-0 text-[11px] ${note.className}`}>
+      <span
+        className={`max-w-[40%] shrink-0 truncate text-[11px] ${note.className}`}
+        title={note.text}
+      >
         {note.text}
       </span>
     </RowButton>
@@ -454,6 +518,7 @@ export function Diagnostics({ diagnostics }: { diagnostics: string[] }) {
  * like USER or PROJECT, so it stays colourless.
  */
 export const SKILL_SOURCE_LABEL = {
+  managed: "managed",
   personal: "personal",
   synced: "synced",
   project: "project",
@@ -464,6 +529,7 @@ export const SKILL_SOURCE_LABEL = {
 
 /** Sources in the order they are listed, highest precedence first. */
 export const SKILL_SOURCE_ORDER: SkillSource[] = [
+  "managed",
   "personal",
   "synced",
   "project",
@@ -490,11 +556,43 @@ export function groupSkillsBySource(
  * through treatment an overridden permission rule gets.
  */
 function shadowTitle(
-  kind: "skill" | "subagent",
+  kind: string,
   shadowedBy: ConfigLayer,
   path: string,
 ): string {
   return `shadowed by ${shadowedBy} ${kind} at ${path}`;
+}
+
+/**
+ * Why an entry is on disk but out of play, for the row's right-hand note and
+ * tooltip: turned off (`disabled`, with core's reason) or shadowed.
+ */
+function offState(
+  kind: string,
+  entry: { shadowedBy?: { layer: ConfigLayer; path: string }; disabled?: string },
+): { note: string; title: string } | null {
+  if (entry.disabled) {
+    return { note: entry.disabled, title: `not offered: ${entry.disabled}` };
+  }
+  if (entry.shadowedBy) {
+    return {
+      note: `shadowed by ${entry.shadowedBy.layer}`,
+      title: shadowTitle(kind, entry.shadowedBy.layer, entry.shadowedBy.path),
+    };
+  }
+  return null;
+}
+
+/** Right-hand muted note on an out-of-play row; the tooltip has the rest. */
+export function OffNote({ text, title }: { text: string; title?: string }) {
+  return (
+    <span
+      className="text-om-muted max-w-[40%] shrink-0 truncate text-[11px]"
+      title={title ?? text}
+    >
+      {text}
+    </span>
+  );
 }
 
 /** `PROJECT  deploy  Ship the app to staging`, struck through when shadowed. */
@@ -511,17 +609,13 @@ export function SkillRow({
   active: boolean;
   onOpen: () => void;
 }) {
-  const shadowed = skill.shadowedBy;
+  const off = offState("skill", skill);
   return (
     <RowButton
       active={active}
-      dim={shadowed !== undefined}
+      dim={off !== null}
       height="h-8"
-      title={
-        shadowed
-          ? shadowTitle("skill", shadowed.layer, shadowed.path)
-          : skill.path
-      }
+      title={off ? off.title : skill.path}
       onClick={onOpen}
     >
       <Badge className="w-[66px] shrink-0 justify-center">
@@ -529,15 +623,16 @@ export function SkillRow({
       </Badge>
       <span
         className={`w-[170px] shrink-0 truncate font-mono text-xs ${
-          shadowed ? "text-om-muted line-through" : ""
+          off ? "text-om-muted line-through" : ""
         }`}
         title={skill.name}
       >
         {skill.name}
       </span>
       <span className="text-om-muted min-w-0 flex-1 truncate text-[11px]">
-        {skill.description ?? projectPath(skill.path, folder, homeDir)}
+        {skill.description ?? rowPath(skill.path, folder, homeDir)}
       </span>
+      {off ? <OffNote text={off.note} title={off.title} /> : null}
     </RowButton>
   );
 }
@@ -556,7 +651,7 @@ export function AgentRow({
   active: boolean;
   onOpen: () => void;
 }) {
-  const shadowed = agent.shadowedBy;
+  const off = offState("subagent", agent);
   // Model and tool count only; the source pane shows the whole frontmatter.
   const facts = [
     agent.model,
@@ -568,21 +663,17 @@ export function AgentRow({
   return (
     <RowButton
       active={active}
-      dim={shadowed !== undefined}
+      dim={off !== null}
       height={facts.length > 0 ? "min-h-[42px] py-1.5" : "h-8"}
-      title={
-        shadowed
-          ? shadowTitle("subagent", shadowed.layer, shadowed.path)
-          : agent.path
-      }
+      title={off ? off.title : agent.path}
       onClick={onOpen}
     >
       <Badge className="w-[66px] shrink-0 justify-center">
-        {layerLabel(agent.layer)}
+        {agent.plugin ? "plugin" : layerLabel(agent.layer)}
       </Badge>
       <span
         className={`w-[150px] shrink-0 truncate font-mono text-xs ${
-          shadowed ? "text-om-muted line-through" : ""
+          off ? "text-om-muted line-through" : ""
         }`}
         title={agent.name}
       >
@@ -590,7 +681,7 @@ export function AgentRow({
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="text-om-muted truncate text-[11px]">
-          {agent.description ?? projectPath(agent.path, folder, homeDir)}
+          {agent.description ?? rowPath(agent.path, folder, homeDir)}
         </span>
         {facts.length > 0 ? (
           <span className="text-om-muted truncate font-mono text-[11px]">
@@ -598,6 +689,7 @@ export function AgentRow({
           </span>
         ) : null}
       </span>
+      {off ? <OffNote text={off.note} title={off.title} /> : null}
     </RowButton>
   );
 }
@@ -606,8 +698,10 @@ export function AgentRow({
  * `PROJECT  fixture-http  http  https://…  env FIXTURE  DISABLED`.
  *
  * State is drawn with the badge families that already exist: a deny pill for a
- * server Claude Code would not load, a plain layer-style badge for one it would
- * have to ask about first. MCP servers have no colour of their own.
+ * server Claude Code would not load — `disabled` by a settings list, or
+ * `blocked` by managed policy whatever the approval says — and a plain
+ * layer-style badge for one it would have to ask about first. MCP servers have
+ * no colour of their own.
  *
  * Never renders an env value or a header value — they hold secrets. Only the
  * key names show.
@@ -634,13 +728,13 @@ export function McpServerRow({
   return (
     <RowButton
       active={active}
-      dim={server.state === "disabled"}
+      dim={isMcpOff(server)}
       height="h-8"
       title={server.reason}
       onClick={onOpen}
     >
       <Badge className="w-[66px] shrink-0 justify-center">
-        {layerLabel(server.layer)}
+        {server.plugin ? "plugin" : layerLabel(server.layer)}
       </Badge>
       <span className="w-[150px] shrink-0 truncate font-mono text-xs">
         {server.name}
@@ -654,7 +748,7 @@ export function McpServerRow({
         className="text-om-muted min-w-0 flex-1 truncate font-mono text-[11px]"
         title={server.target}
       >
-        {server.target ?? projectPath(server.path, folder, homeDir)}
+        {server.target ?? rowPath(server.path, folder, homeDir)}
       </span>
       {keys.length > 0 ? (
         <span
@@ -664,9 +758,10 @@ export function McpServerRow({
           {keys.join(", ")}
         </span>
       ) : null}
-      {server.state === "disabled" ? (
-        <Badge variant="deny" className="shrink-0">
-          disabled
+      {isMcpOff(server) ? <OffNote text={server.reason} /> : null}
+      {server.state === "disabled" || server.state === "blocked" ? (
+        <Badge variant="deny" className="shrink-0" title={server.reason}>
+          {server.state}
         </Badge>
       ) : null}
       {server.state === "unapproved" ? (
@@ -679,4 +774,472 @@ export function McpServerRow({
 /** Source-pane target for a permission rule: its line in the settings file. */
 export function ruleSourceMatches(rule: PermissionRule): string[] {
   return [`"${rule.rule}"`, rule.rule];
+}
+
+/** Badge text for where a hook was declared: its layer, or what declares it. */
+const HOOK_SOURCE_BADGE = {
+  plugin: "plugin",
+  skill: "skill",
+  agent: "subagent",
+} as const;
+
+/**
+ * `PreToolUse  Edit|Write  lint.sh  PROJECT`, with a second line when the hook
+ * is not simply a settings hook: which plugin, skill or subagent declares it,
+ * when it is registered, and why it would not run. A disabled hook gets the
+ * same faded, struck-through treatment as a shadowed skill.
+ */
+export function HookRow({
+  hook,
+  showTimeout = false,
+  active,
+  onOpen,
+}: {
+  hook: HookEntry;
+  showTimeout?: boolean;
+  active: boolean;
+  onOpen: () => void;
+}) {
+  const source = hook.source ?? "settings";
+  const details = [
+    source === "settings" ? null : hookOrigin(hook),
+    hookScope(hook),
+    hook.disabled ? `disabled: ${hook.disabled}` : null,
+  ].filter((part): part is string => part !== null);
+  const type = hook.type && hook.type !== "command" ? hook.type : null;
+
+  return (
+    <RowButton
+      active={active}
+      dim={hook.disabled !== undefined}
+      height={details.length > 0 ? "min-h-[42px] py-1.5" : "h-8"}
+      title={hook.disabled ? `disabled: ${hook.disabled}` : hook.path}
+      onClick={onOpen}
+    >
+      <span className="text-om-text w-[92px] shrink-0 truncate text-[11px] font-medium" title={hook.event}>
+        {hook.event}
+      </span>
+      <span className="text-om-muted w-[86px] shrink-0 truncate font-mono text-[11px]">
+        {hook.matcher ?? "*"}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span
+          className={`truncate font-mono text-xs ${
+            hook.disabled ? "text-om-muted line-through" : ""
+          }`}
+          title={hook.command}
+        >
+          {type ? <span className="text-om-muted">{type} </span> : null}
+          {hook.command}
+        </span>
+        {details.length > 0 ? (
+          <span className="text-om-muted truncate text-[11px]" title={details.join(" · ")}>
+            {details.join(" · ")}
+          </span>
+        ) : null}
+      </span>
+      <Badge className="w-[66px] shrink-0 justify-center">
+        {source === "settings" ? layerLabel(hook.layer) : HOOK_SOURCE_BADGE[source]}
+      </Badge>
+      {showTimeout ? (
+        <span className="text-om-muted shrink-0 text-[11px]">
+          {hook.timeoutSeconds ? `timeout ${hook.timeoutSeconds}s` : "no timeout"}
+        </span>
+      ) : null}
+    </RowButton>
+  );
+}
+
+/** Source-pane target for a hook row: its command in the declaring file. */
+export function hookSource(hook: HookEntry, key: string): SourceTarget {
+  return {
+    key,
+    path: hook.path,
+    layer: hook.layer,
+    matches: [`"${hook.command}"`, hook.command],
+  };
+}
+
+/** Source-pane target for an effective setting: its key in the file that set it. */
+export function settingSource(
+  setting: EffectiveValue<unknown>,
+  key: string,
+): SourceTarget | null {
+  if (!setting.source) return null;
+  return {
+    key,
+    path: setting.source.path,
+    layer: setting.source.layer,
+    matches: [`"${settingKeyName(setting.key)}"`],
+  };
+}
+
+/**
+ * `mode  acceptEdits` — one session-wide setting as a small square chip, in the
+ * layer-badge family: structure, not state, so no colour. Opens the file that
+ * set it; inert when the value is Claude Code's default.
+ */
+export function SettingChip({
+  label,
+  value,
+  title,
+  active,
+  onOpen,
+}: {
+  label: string;
+  value: string;
+  title: string;
+  active: boolean;
+  onOpen?: () => void;
+}) {
+  const body = (
+    <>
+      <span className="text-om-muted">{label}</span>
+      <span className="text-om-text font-mono">{value}</span>
+    </>
+  );
+  const base =
+    "flex h-6 shrink-0 items-center gap-1.5 rounded-[4px] border px-2 text-[11px]";
+  if (!onOpen) {
+    return (
+      <span className={`${base} border-om-border`} title={title}>
+        {body}
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      title={title}
+      className={`${base} cursor-pointer transition-colors ${
+        active
+          ? "border-om-amber bg-om-amber-bg"
+          : "border-om-border hover:bg-om-raised"
+      }`}
+    >
+      {body}
+    </button>
+  );
+}
+
+/**
+ * The session-wide switches that change what the panels below mean: the
+ * permission mode always, the rest only when they are not Claude Code's
+ * default. `instructionFiles` is left to the Instructions panel.
+ */
+export function SessionSettingsRow({
+  context,
+  folder,
+  homeDir,
+  activeSourceKey,
+  onOpenSource,
+}: {
+  context: ResolvedContext;
+  folder: string;
+  homeDir: string;
+  activeSourceKey: string | null;
+  onOpenSource: (target: SourceTarget) => void;
+}) {
+  const items = sessionSettings(context).filter(
+    (item) => item.id !== "instructionFiles",
+  );
+  if (items.length === 0) return null;
+  const modeNote = context.effective?.permissionMode.note;
+
+  return (
+    <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+      {items.map((item) => {
+        const key = `session:${item.id}`;
+        const target = settingSource(item.setting, key);
+        return (
+          <SettingChip
+            key={item.id}
+            label={item.label}
+            value={item.value}
+            title={settingProvenance(item.setting, folder, homeDir)}
+            active={activeSourceKey === key}
+            onOpen={target ? () => onOpenSource(target) : undefined}
+          />
+        );
+      })}
+      {modeNote ? (
+        <span className="text-om-muted min-w-0 truncate text-[11px]" title={modeNote}>
+          {modeNote}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * `instructionFiles  CLAUDE.md and AGENTS.md  PROJECT  .claude/settings.json`:
+ * a non-default setting shown at the top of the panel it changes.
+ */
+export function SettingRow({
+  setting,
+  value,
+  folder,
+  homeDir,
+  active,
+  onOpen,
+}: {
+  setting: EffectiveValue<unknown>;
+  value: string;
+  folder: string;
+  homeDir: string;
+  active: boolean;
+  onOpen?: () => void;
+}) {
+  const body = (
+    <>
+      <Badge className="w-[66px] shrink-0 justify-center">
+        {setting.source ? layerLabel(setting.source.layer) : "default"}
+      </Badge>
+      <span className="text-om-muted shrink-0 font-mono text-[11px]">
+        {settingKeyName(setting.key)}
+      </span>
+      <span className="text-om-text min-w-0 flex-1 truncate text-xs">{value}</span>
+      <span
+        className="text-om-muted max-w-[45%] shrink-0 truncate font-mono text-[11px]"
+        title={settingProvenance(setting, folder, homeDir)}
+      >
+        {setting.note ??
+          (setting.source ? rowPath(setting.source.path, folder, homeDir) : "")}
+      </span>
+    </>
+  );
+  if (!onOpen) {
+    return (
+      <div className="border-om-border/60 flex h-[30px] w-full shrink-0 items-center gap-2.5 border-t px-3 first:border-t-0">
+        {body}
+      </div>
+    );
+  }
+  return (
+    <RowButton active={active} height="h-[30px]" title={setting.key} onClick={onOpen}>
+      {body}
+    </RowButton>
+  );
+}
+
+/** `instructionFiles` as a row, when it is not the default. */
+export function instructionFilesValue(context: ResolvedContext): string {
+  return INSTRUCTION_FILES_LABEL[context.effective.instructionFiles.value];
+}
+
+/**
+ * `USER  superpowers@official  4.1.0  Core skills…  3 skills · 2 hooks`.
+ * A disabled plugin is faded with core's reason; it contributes nothing, so
+ * its counts are left off.
+ */
+export function PluginRow({
+  plugin,
+  context,
+  active,
+  onOpen,
+}: {
+  plugin: PluginEntry;
+  context: ResolvedContext;
+  active: boolean;
+  onOpen: () => void;
+}) {
+  const brings = plugin.enabled
+    ? contributionSummary(pluginContributions(context, plugin.name))
+    : null;
+  const origin =
+    plugin.origin === "marketplace"
+      ? (plugin.marketplace ?? "marketplace")
+      : plugin.origin === "skills-dir"
+        ? "skills dir"
+        : "synced";
+
+  return (
+    <RowButton
+      active={active}
+      dim={!plugin.enabled}
+      height="min-h-[42px] py-1.5"
+      title={plugin.reason}
+      onClick={onOpen}
+    >
+      <Badge className="w-[66px] shrink-0 justify-center">
+        {layerLabel(plugin.layer)}
+      </Badge>
+      <span className="flex w-[170px] shrink-0 flex-col">
+        <span
+          className={`truncate font-mono text-xs ${
+            plugin.enabled ? "" : "text-om-muted line-through"
+          }`}
+          title={plugin.id}
+        >
+          {plugin.name}
+        </span>
+        <span className="text-om-muted truncate font-mono text-[11px]" title={plugin.id}>
+          {origin}
+          {plugin.version ? ` · ${plugin.version}` : ""}
+        </span>
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="text-om-muted truncate text-[11px]" title={plugin.description}>
+          {plugin.description ?? ""}
+        </span>
+        {brings ? (
+          <span className="text-om-muted truncate font-mono text-[11px]">{brings}</span>
+        ) : null}
+      </span>
+      {plugin.enabled ? null : <OffNote text={plugin.reason} />}
+    </RowButton>
+  );
+}
+
+/**
+ * `PROJECT  ●  terse  Short answers`. The active style carries the teal
+ * always-loaded glyph: it is in the system prompt from the first turn, which
+ * is exactly what teal means. Inactive styles get an empty glyph slot.
+ */
+export function OutputStyleRow({
+  style,
+  active,
+  onOpen,
+}: {
+  style: OutputStyleEntry;
+  active: boolean;
+  onOpen: () => void;
+}) {
+  const off = offState("output style", style);
+  const facts = [
+    style.forceForPlugin ? "forced by plugin" : null,
+    style.keepCodingInstructions ? "keeps coding instructions" : null,
+  ].filter((fact): fact is string => fact !== null);
+  return (
+    <RowButton
+      active={active}
+      dim={off !== null}
+      height="h-8"
+      title={off ? off.title : style.path}
+      onClick={onOpen}
+    >
+      <Badge className="w-[66px] shrink-0 justify-center">
+        {style.plugin ? "plugin" : layerLabel(style.layer)}
+      </Badge>
+      {style.active ? (
+        <LoadingGlyph loading="always" reason="the session's output style" />
+      ) : (
+        <span className="w-4 shrink-0" />
+      )}
+      <span
+        className={`w-[150px] shrink-0 truncate font-mono text-xs ${
+          off ? "text-om-muted line-through" : ""
+        }`}
+        title={style.name}
+      >
+        {style.name}
+      </span>
+      <span className="text-om-muted min-w-0 flex-1 truncate text-[11px]">
+        {style.description ?? ""}
+      </span>
+      {off ? (
+        <OffNote text={off.note} title={off.title} />
+      ) : facts.length > 0 ? (
+        <OffNote text={facts.join(" · ")} />
+      ) : null}
+    </RowButton>
+  );
+}
+
+/** `PROJECT  release  Cut a release branch`, faded when workflows are off. */
+export function WorkflowRow({
+  workflow,
+  folder,
+  homeDir,
+  active,
+  onOpen,
+}: {
+  workflow: WorkflowEntry;
+  folder: string;
+  homeDir: string;
+  active: boolean;
+  onOpen: () => void;
+}) {
+  const off = offState("workflow", workflow);
+  return (
+    <RowButton
+      active={active}
+      dim={off !== null}
+      height="h-8"
+      title={off ? off.title : workflow.path}
+      onClick={onOpen}
+    >
+      <Badge className="w-[66px] shrink-0 justify-center">
+        {workflow.plugin ? "plugin" : layerLabel(workflow.layer)}
+      </Badge>
+      <span
+        className={`w-[170px] shrink-0 truncate font-mono text-xs ${
+          off ? "text-om-muted line-through" : ""
+        }`}
+        title={workflow.name}
+      >
+        {workflow.name}
+      </span>
+      <span className="text-om-muted min-w-0 flex-1 truncate text-[11px]">
+        {workflow.description ?? rowPath(workflow.path, folder, homeDir)}
+      </span>
+      {off ? <OffNote text={off.note} title={off.title} /> : null}
+    </RowButton>
+  );
+}
+
+/**
+ * Source-pane target for an instruction row. The managed `claudeMd` text has
+ * no file of its own, so it opens the managed settings file at that key.
+ */
+export function instructionSource(entry: MemoryEntry, key: string): SourceTarget {
+  if (entry.kind === "inline") {
+    return { key, path: entry.path, layer: entry.layer, matches: [`"claudeMd"`] };
+  }
+  return {
+    key,
+    path: entry.path,
+    layer: entry.layer,
+    ...(entry.kind === "import" && entry.importedAtLine && entry.importedBy
+      ? { importedAt: { line: entry.importedAtLine, parent: entry.importedBy } }
+      : {}),
+  };
+}
+
+/** Key identifying an instruction row, shared by the file and folder views. */
+export function instructionKey(entry: MemoryEntry): string {
+  return `${entry.kind}:${entry.path}:${entry.importedAtLine ?? 0}`;
+}
+
+/**
+ * The `instructionFiles` row at the top of the Instructions panel, only when
+ * it is not Claude Code's default: it decides whether AGENTS.md loads at all.
+ */
+export function InstructionFilesRow({
+  context,
+  folder,
+  homeDir,
+  activeSourceKey,
+  onOpenSource,
+}: {
+  context: ResolvedContext;
+  folder: string;
+  homeDir: string;
+  activeSourceKey: string | null;
+  onOpenSource: (target: SourceTarget) => void;
+}) {
+  const setting = context.effective?.instructionFiles;
+  if (!setting || setting.value === DEFAULT_INSTRUCTION_FILES) return null;
+  const target = settingSource(setting, "setting:instructionFiles");
+  return (
+    <SettingRow
+      setting={setting}
+      value={instructionFilesValue(context)}
+      folder={folder}
+      homeDir={homeDir}
+      active={activeSourceKey === "setting:instructionFiles"}
+      onOpen={target ? () => onOpenSource(target) : undefined}
+    />
+  );
 }

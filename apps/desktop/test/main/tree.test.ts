@@ -21,6 +21,7 @@ describe("marksForName", () => {
   it("marks instruction files, settings and .claude folders", () => {
     expect(marksForName("CLAUDE.md", "file")).toEqual(["instructions"]);
     expect(marksForName("CLAUDE.local.md", "file")).toEqual(["instructions"]);
+    expect(marksForName("AGENTS.md", "file")).toEqual(["instructions"]);
     expect(marksForName("settings.local.json", "file")).toEqual(["instructions"]);
     expect(marksForName(".claude", "dir")).toEqual(["instructions"]);
     expect(marksForName(".mcp.json", "file")).toEqual(["mcp"]);

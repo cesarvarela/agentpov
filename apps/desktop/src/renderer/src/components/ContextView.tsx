@@ -8,27 +8,25 @@ import type {
 import {
   editHooks,
   instructionEntries,
+  isInstructionFile,
   layerLabel,
   matchingDenyRules,
   memoryEntries,
+  noInstructionsText,
   overridingDecisionFor,
+  plural,
   verdictFor,
   winningRuleFor,
 } from "../lib/derive";
-import {
-  basename,
-  dirname,
-  displayPath,
-  languageOf,
-  projectPath,
-  relativeTo,
-} from "../lib/paths";
+import { basename, dirname, displayPath, languageOf, relativeTo, rowPath } from "../lib/paths";
 import type { FileDetail, SelectedTarget } from "../hooks/useProject";
 import type { SourceTarget } from "../hooks/useSource";
 import {
   DECISION_VARIANT,
   Diagnostics,
   EmptyRow,
+  HookRow,
+  InstructionFilesRow,
   InstructionRow,
   LoadingGlyph,
   LoadingLegend,
@@ -36,10 +34,15 @@ import {
   PermissionRow,
   RowButton,
   SectionDivider,
+  SessionSettingsRow,
+  hookSource,
+  instructionKey,
+  instructionSource,
   layerRank,
   ruleSourceMatches,
 } from "./ContextPanels";
 import { FolderContextView } from "./FolderContextView";
+import { SandboxPanel } from "./SandboxPanel";
 import { DocIcon, HookIcon, MemoryIcon, ShieldIcon } from "./Icons";
 
 /** One `DENY  Edit(foo.ts)  from <rule> · <layer> · <file>` line. */
@@ -123,10 +126,9 @@ function FileContextView({
   const name = basename(file);
 
   const instructions = context ? instructionEntries(context) : [];
-  // CLAUDE.md files and `.claude/rules` files; imports are counted inside them.
-  const instructionFiles = instructions.filter(
-    (entry) => entry.kind === "claude-md" || entry.kind === "rule",
-  ).length;
+  // CLAUDE.md, AGENTS.md, `.claude/rules` files and the managed `claudeMd`
+  // text; imports are counted inside the file that pulls them in.
+  const instructionFiles = instructions.filter(isInstructionFile).length;
   const ruleFiles = instructions.filter((entry) => entry.kind === "rule").length;
   const memory = context ? memoryEntries(context) : [];
   const hooks = context ? editHooks(context) : [];
@@ -152,6 +154,12 @@ function FileContextView({
   const matching = context
     ? context.permissions.filter((rule) => rule.matchesFile)
     : [];
+  const ignored = context
+    ? context.permissions.filter((rule) => rule.ignored).length
+    : 0;
+  const disabledHooks = hooks.filter((hook) => hook.disabled).length;
+  // With no rule, the permission mode decides (acceptEdits, plan, ...).
+  const mode = context?.effective?.permissionMode.value;
   const settingsFiles: SettingsEntry[] = context
     ? [...context.settings].sort(
         (a, b) => layerRank(a.layer) - layerRank(b.layer),
@@ -186,6 +194,15 @@ function FileContextView({
             {detail?.truncated ? " (truncated)" : ""}
           </span>
         </div>
+        {context ? (
+          <SessionSettingsRow
+            context={context}
+            folder={folder}
+            homeDir={homeDir}
+            activeSourceKey={activeSourceKey}
+            onOpenSource={onOpenSource}
+          />
+        ) : null}
       </div>
 
       <div className="flex flex-col gap-3.5">
@@ -202,15 +219,22 @@ function FileContextView({
               : undefined
           }
         >
+          {context ? (
+            <InstructionFilesRow
+              context={context}
+              folder={folder}
+              homeDir={homeDir}
+              activeSourceKey={activeSourceKey}
+              onOpenSource={onOpenSource}
+            />
+          ) : null}
           {instructions.length === 0 ? (
             <EmptyRow
-              text={
-                loading ? "Resolving…" : "No CLAUDE.md applies to this file."
-              }
+              text={loading ? "Resolving…" : noInstructionsText(context, "file")}
             />
           ) : (
             instructions.map((entry) => {
-              const key = `${entry.kind}:${entry.path}:${entry.importedAtLine ?? 0}`;
+              const key = instructionKey(entry);
               return (
                 <InstructionRow
                   key={key}
@@ -218,23 +242,7 @@ function FileContextView({
                   folder={folder}
                   homeDir={homeDir}
                   active={activeSourceKey === key}
-                  onOpen={() =>
-                    onOpenSource({
-                      key,
-                      path: entry.path,
-                      layer: entry.layer,
-                      ...(entry.kind === "import" &&
-                      entry.importedAtLine &&
-                      entry.importedBy
-                        ? {
-                            importedAt: {
-                              line: entry.importedAtLine,
-                              parent: entry.importedBy,
-                            },
-                          }
-                        : {}),
-                    })
-                  }
+                  onOpen={() => onOpenSource(instructionSource(entry, key))}
                 />
               );
             })
@@ -289,7 +297,9 @@ function FileContextView({
           title="Permissions"
           note={
             context
-              ? `${matching.length} matching of ${context.permissions.length} rules`
+              ? `${matching.length} matching of ${plural(context.permissions.length, "rule")}${
+                  ignored > 0 ? ` · ${ignored} ignored` : ""
+                }`
               : undefined
           }
         >
@@ -308,12 +318,14 @@ function FileContextView({
                     callTitle={verdict.call}
                     explanation={
                       rule
-                        ? `from ${rule.rule} · ${layerLabel(rule.layer)} · ${projectPath(
+                        ? `from ${rule.rule} · ${layerLabel(rule.layer)} · ${rowPath(
                             rule.path,
                             folder,
                             homeDir,
                           )}`
-                        : "no rule matches · Claude Code will prompt"
+                        : !mode || mode === "default"
+                          ? "no rule matches · Claude Code will prompt"
+                          : `no rule matches · left to ${mode} mode`
                     }
                     active={activeSourceKey === key}
                     onOpen={
@@ -337,7 +349,7 @@ function FileContextView({
                     key={key}
                     decision="deny"
                     call={rule.rule}
-                    explanation={`from ${rule.rule} · ${layerLabel(rule.layer)} · ${projectPath(
+                    explanation={`from ${rule.rule} · ${layerLabel(rule.layer)} · ${rowPath(
                       rule.path,
                       folder,
                       homeDir,
@@ -413,7 +425,7 @@ function FileContextView({
                         {layerLabel(entry.layer)}
                       </Badge>
                       <span className="min-w-0 flex-1 truncate font-mono text-xs">
-                        {projectPath(entry.path, folder, homeDir)}
+                        {rowPath(entry.path, folder, homeDir)}
                       </span>
                       <span className="text-om-muted shrink-0 text-[11px]">
                         {`${count} rule${count === 1 ? "" : "s"}`}
@@ -426,54 +438,35 @@ function FileContextView({
           )}
         </Panel>
 
+        <SandboxPanel
+          sandbox={context?.sandbox}
+          targetKind="file"
+          folder={folder}
+          homeDir={homeDir}
+          activeSourceKey={activeSourceKey}
+          onOpenSource={onOpenSource}
+        />
+
         <Panel
           icon={<HookIcon className="text-om-muted" />}
           title="Hooks"
-          note="on Edit of this path"
+          note={`on Edit of this path${disabledHooks > 0 ? ` · ${disabledHooks} disabled` : ""}`}
         >
           {hooks.length === 0 ? (
             <EmptyRow text="No hooks fire on an Edit of this file." />
           ) : (
-            hooks.map((hook, index) => (
-              <RowButton
-                key={`${hook.path}:${hook.event}:${index}`}
-                active={
-                  activeSourceKey ===
-                  `hook:${hook.path}:${hook.event}:${index}`
-                }
-                height="h-8"
-                title={hook.path}
-                onClick={() =>
-                  onOpenSource({
-                    key: `hook:${hook.path}:${hook.event}:${index}`,
-                    path: hook.path,
-                    layer: hook.layer,
-                    matches: [`"${hook.command}"`, hook.command],
-                  })
-                }
-              >
-                <span className="text-om-text w-[92px] shrink-0 text-[11px] font-medium">
-                  {hook.event}
-                </span>
-                <span className="text-om-muted w-[86px] shrink-0 truncate font-mono text-[11px]">
-                  {hook.matcher ?? "*"}
-                </span>
-                <span
-                  className="min-w-0 flex-1 truncate font-mono text-xs"
-                  title={hook.command}
-                >
-                  {hook.command}
-                </span>
-                <Badge className="w-[66px] shrink-0 justify-center">
-                  {layerLabel(hook.layer)}
-                </Badge>
-                <span className="text-om-muted shrink-0 text-[11px]">
-                  {hook.timeoutSeconds
-                    ? `timeout ${hook.timeoutSeconds}s`
-                    : "no timeout"}
-                </span>
-              </RowButton>
-            ))
+            hooks.map((hook, index) => {
+              const key = `hook:${hook.path}:${hook.event}:${index}`;
+              return (
+                <HookRow
+                  key={key}
+                  hook={hook}
+                  showTimeout
+                  active={activeSourceKey === key}
+                  onOpen={() => onOpenSource(hookSource(hook, key))}
+                />
+              );
+            })
           )}
         </Panel>
 
