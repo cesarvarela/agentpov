@@ -32,7 +32,14 @@ export async function readJsonFile(
   return parsed;
 }
 
-/** Settings files for each layer, lowest precedence first. */
+/**
+ * Settings files for each layer, lowest precedence first.
+ *
+ * Project settings come from `folder` only. Local settings come from `folder`
+ * and, when it differs, the main checkout's root: Claude Code 2.1.280 reads
+ * `<repoRoot>/.claude/settings.local.json` for a subfolder of a repository
+ * and for a linked worktree, and never the `settings.json` next to it.
+ */
 export async function collectSettings(run: ResolveRun): Promise<SettingsEntry[]> {
   const { p } = run;
   const claudeDir = projectClaudeDir(run);
@@ -40,8 +47,14 @@ export async function collectSettings(run: ResolveRun): Promise<SettingsEntry[]>
     { path: run.managedSettingsPath, layer: "managed" },
     { path: p.join(userClaudeDir(run), "settings.json"), layer: "user" },
     { path: p.join(claudeDir, "settings.json"), layer: "project" },
-    { path: p.join(claudeDir, "settings.local.json"), layer: "local" },
   ];
+  if (run.repoRoot !== run.folder) {
+    candidates.push({
+      path: p.join(run.repoRoot, ".claude", "settings.local.json"),
+      layer: "local",
+    });
+  }
+  candidates.push({ path: p.join(claudeDir, "settings.local.json"), layer: "local" });
 
   const out: SettingsEntry[] = [];
   for (const candidate of candidates) {

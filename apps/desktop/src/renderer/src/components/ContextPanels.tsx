@@ -459,6 +459,7 @@ export const SKILL_SOURCE_LABEL = {
   project: "project",
   nested: "nested",
   plugin: "plugin",
+  command: "command",
 } as const satisfies Record<SkillSource, string>;
 
 /** Sources in the order they are listed, highest precedence first. */
@@ -468,6 +469,7 @@ export const SKILL_SOURCE_ORDER: SkillSource[] = [
   "project",
   "nested",
   "plugin",
+  "command",
 ];
 
 /** Above this many skills the panel groups them by source. */

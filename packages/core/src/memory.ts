@@ -1,4 +1,5 @@
 import {
+  ancestorsOf,
   listDir,
   managedDirFor,
   projectClaudeDir,
@@ -8,12 +9,13 @@ import {
   type ResolveRun,
 } from "./context.js";
 import { frontmatterList, parseFrontmatterFields, summarize } from "./frontmatter.js";
-import { globCoversDirectory, matchGlob } from "./glob.js";
+import { globCoversDirectory, globToRegExp, matchGlob } from "./glob.js";
 import { descendingChain, toAbsolute, toPosix } from "./paths.js";
 import {
   type ConfigLayer,
   type MemoryEntry,
   type MemoryLoading,
+  type SettingsEntry,
 } from "./types.js";
 
 /** Claude Code follows `@imports` four hops deep. */
@@ -188,15 +190,21 @@ async function collectImports(
   return out;
 }
 
-/** `/Users/x/proj` → `-Users-x-proj`. */
-export function projectSlug(folder: string, platform: NodeJS.Platform): string {
-  const withSeparators =
-    platform === "win32" ? folder.replace(/[\\:]/g, "-") : folder;
-  return withSeparators.replace(/\//g, "-");
+/**
+ * `/Users/x/my.proj` → `-Users-x-my-proj`: every character that is not a
+ * letter or digit becomes `-`, as Claude Code 2.1.280 names
+ * `~/.claude/projects/<slug>`.
+ */
+export function projectSlug(folder: string, _platform?: NodeJS.Platform): string {
+  return folder.replace(/[^a-zA-Z0-9]/g, "-");
 }
 
+/**
+ * Auto-memory lives under the main checkout's root, so a subfolder of a
+ * repository and every worktree of it share one memory directory.
+ */
 async function collectMemoryDirectory(run: ResolveRun): Promise<MemoryEntry[]> {
-  const slug = projectSlug(run.folder, run.platform);
+  const slug = projectSlug(run.repoRoot);
   const dir = run.p.join(userClaudeDir(run), "projects", slug, "memory");
   const entries = await listDir(run, dir);
   const markdown = entries
@@ -294,9 +302,9 @@ async function listRuleFiles(run: ResolveRun, root: string): Promise<string[]> {
   return out.sort();
 }
 
-/** Does a rule's `paths:` glob reach the resolved target? */
-function ruleGlobHitsTarget(run: ResolveRun, glob: string): boolean {
-  const relativeTarget = toPosix(run.p.relative(run.folder, run.file));
+/** Does a rule's `paths:` glob, relative to `base`, reach the resolved target? */
+function ruleGlobHitsTarget(run: ResolveRun, glob: string, base: string): boolean {
+  const relativeTarget = toPosix(run.p.relative(base, run.file));
   for (const expanded of expandBraces(glob)) {
     const pattern = toPosix(expanded.replace(/^\.\//, "").replace(/^\/+/, ""));
     if (pattern.length === 0) continue;
@@ -327,18 +335,20 @@ async function collectRules(
   root: string,
   layer: ConfigLayer,
   seen: Set<string>,
+  excluded: (path: string) => boolean,
+  base: string = run.folder,
 ): Promise<MemoryEntry[]> {
   const out: MemoryEntry[] = [];
   const imports: MemoryEntry[] = [];
 
   for (const path of await listRuleFiles(run, root)) {
-    if (seen.has(path)) continue;
+    if (seen.has(path) || excluded(path)) continue;
     const content = await readText(run, path);
     if (content === null) continue;
     const globs = frontmatterList(parseFrontmatterFields(content), "paths");
     const conditional = globs.length > 0;
     const matches =
-      !conditional || globs.some((glob) => ruleGlobHitsTarget(run, glob));
+      !conditional || globs.some((glob) => ruleGlobHitsTarget(run, glob, base));
 
     const candidate: Candidate = conditional
       ? { path, layer, scopedToFile: true, globs }
@@ -368,9 +378,38 @@ async function collectRules(
   return [...out, ...imports];
 }
 
-/** Every CLAUDE.md, rule, import and memory file that applies, lowest precedence first. */
-export async function collectMemory(run: ResolveRun): Promise<MemoryEntry[]> {
+/**
+ * `claudeMdExcludes` from every settings layer: globs or absolute paths
+ * matched against a CLAUDE.md or rule file's absolute path. Managed files
+ * can't be excluded.
+ */
+function excludesFrom(settings: SettingsEntry[]): (path: string, layer: ConfigLayer) => boolean {
+  const patterns: RegExp[] = [];
+  for (const entry of settings) {
+    const value = entry.values["claudeMdExcludes"];
+    if (!Array.isArray(value)) continue;
+    for (const item of value) {
+      if (typeof item === "string" && item.length > 0) patterns.push(globToRegExp(toPosix(item)));
+    }
+  }
+  return (path, layer) =>
+    layer !== "managed" && patterns.some((pattern) => pattern.test(toPosix(path)));
+}
+
+/**
+ * Every CLAUDE.md, rule, import and memory file that applies, lowest precedence first.
+ *
+ * Besides the project folder itself, Claude Code 2.1.280 loads `CLAUDE.md`,
+ * `.claude/CLAUDE.md`, `.claude/rules` and `CLAUDE.local.md` from every
+ * directory above it, up to but not including the filesystem root — past the
+ * git root too.
+ */
+export async function collectMemory(
+  run: ResolveRun,
+  settings: SettingsEntry[] = [],
+): Promise<MemoryEntry[]> {
   const { p } = run;
+  const isExcluded = excludesFrom(settings);
   // A directory target owns its own CLAUDE.md, so the chain starts at the
   // target itself; for a file it starts at the directory holding the file.
   const targetDir =
@@ -399,7 +438,7 @@ export async function collectMemory(run: ResolveRun): Promise<MemoryEntry[]> {
 
   const emit = async (list: Candidate[]): Promise<void> => {
     for (const candidate of list) {
-      if (seen.has(candidate.path)) continue;
+      if (seen.has(candidate.path) || isExcluded(candidate.path, candidate.layer)) continue;
       seen.add(candidate.path);
       const reason = candidate.scopedToFile ? scopedReason : REASON_ALWAYS;
       const loading: MemoryLoading = candidate.scopedToFile ? "on-read" : "always";
@@ -416,15 +455,34 @@ export async function collectMemory(run: ResolveRun): Promise<MemoryEntry[]> {
     }
   };
 
+  const rules = (root: string, layer: ConfigLayer, base?: string) =>
+    collectRules(run, root, layer, seen, (path) => isExcluded(path, layer), base);
+
   await emit(candidates);
-  out.push(
-    ...(await collectRules(run, p.join(userClaudeDir(run), "rules"), "user", seen)),
-  );
+  out.push(...(await rules(p.join(userClaudeDir(run), "rules"), "user")));
   out.push(...(await collectMemoryDirectory(run)));
+
+  // Parent folders, farthest first, in the order Claude Code lists them. A
+  // worktree kept inside its main checkout skips that checkout's checked-in
+  // files, which duplicate its own, but still gets its CLAUDE.local.md.
+  const parents = ancestorsOf(p, run.folder).slice(1, -1).reverse();
+  const inMainCheckout = (dir: string) =>
+    run.gitRoot !== null &&
+    run.gitRoot !== run.repoRoot &&
+    (dir === run.repoRoot || dir.startsWith(`${run.repoRoot}${p.sep}`));
+  for (const dir of parents) {
+    if (!inMainCheckout(dir)) {
+      await emit([
+        { path: p.join(dir, "CLAUDE.md"), layer: "project", scopedToFile: false },
+        { path: p.join(dir, ".claude", "CLAUDE.md"), layer: "project", scopedToFile: false },
+      ]);
+      out.push(...(await rules(p.join(dir, ".claude", "rules"), "project", dir)));
+    }
+    await emit([{ path: p.join(dir, "CLAUDE.local.md"), layer: "local", scopedToFile: false }]);
+  }
+
   await emit(projectCandidates);
-  out.push(
-    ...(await collectRules(run, p.join(projectClaudeDir(run), "rules"), "project", seen)),
-  );
+  out.push(...(await rules(p.join(projectClaudeDir(run), "rules"), "project")));
   await emit(directoryCandidates);
 
   return out;

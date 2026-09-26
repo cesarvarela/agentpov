@@ -1,7 +1,7 @@
 export * from "./types.js";
 export { createNodeFileSystem } from "./node-fs.js";
 
-import { managedDirFor, type ResolveRun } from "./context.js";
+import { locateRepository, managedDirFor, type ResolveRun } from "./context.js";
 import { collectAgents, collectMcpServers, collectSkills } from "./discovery.js";
 import { collectHooks } from "./hooks.js";
 import { collectMemory } from "./memory.js";
@@ -40,6 +40,8 @@ export async function resolveContext(
   const absoluteTarget = toAbsolute(p, absoluteFolder, target);
   const targetKind = options.targetKind ?? "file";
 
+  const repository = await locateRepository(options.fs, p, absoluteFolder);
+
   const run: ResolveRun = {
     fs: options.fs,
     p,
@@ -51,11 +53,13 @@ export async function resolveContext(
     managedDir: managedDirFor(platform),
     managedSettingsPath:
       options.managedSettingsPath ?? managedSettingsPathFor(platform),
+    gitRoot: repository.gitRoot,
+    repoRoot: repository.repoRoot,
     diagnostics: [],
   };
 
-  const memory = await collectMemory(run);
   const settings = await collectSettings(run);
+  const memory = await collectMemory(run, settings);
   const permissions = collectPermissions(run, settings);
   const hooks = collectHooks(settings);
   const skills = await collectSkills(run, settings);

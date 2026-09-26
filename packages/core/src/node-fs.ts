@@ -1,4 +1,5 @@
 import { readdir, readFile, stat } from "node:fs/promises";
+import { join } from "node:path";
 
 import { type FileSystemReader } from "./types.js";
 
@@ -30,10 +31,16 @@ export function createNodeFileSystem(): FileSystemReader {
     async readDir(path: string): Promise<{ name: string; isDirectory: boolean }[] | null> {
       try {
         const entries = await readdir(path, { withFileTypes: true });
-        return entries.map((entry) => ({
-          name: entry.name,
-          isDirectory: entry.isDirectory(),
-        }));
+        return Promise.all(
+          entries.map(async (entry) => ({
+            name: entry.name,
+            // Claude Code follows symlinked skill and rule directories, so
+            // a link counts as whatever it points at (a broken one as a file).
+            isDirectory: entry.isSymbolicLink()
+              ? await stat(join(path, entry.name)).then((info) => info.isDirectory(), () => false)
+              : entry.isDirectory(),
+          })),
+        );
       } catch (error) {
         if (isMissing(error)) return null;
         throw error;
