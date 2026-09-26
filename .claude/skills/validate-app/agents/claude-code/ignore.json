@@ -1,0 +1,33 @@
+{
+  "validatedVersion": "2.1.280",
+  "ignore": [
+    {
+      "category": "skills",
+      "side": "agent",
+      "names": [
+        "artifact-capabilities", "artifact-diagramming", "batch", "claude-api", "code-review",
+        "dataviz", "debug", "deep-research", "design", "design-sync", "doctor",
+        "fewer-permission-prompts", "loop", "run", "run-skill-generator", "schedule", "simplify",
+        "slides", "update-config", "verify", "workflow-authoring"
+      ],
+      "reason": "Bundled in the CLI binary; no SKILL.md on disk for the app to point at."
+    },
+    {
+      "category": "agents",
+      "side": "agent",
+      "names": ["claude", "claude-code-guide", "Explore", "general-purpose", "Plan", "statusline-setup"],
+      "reason": "Built-in subagents; no .md file on disk."
+    },
+    {
+      "category": "plugins",
+      "side": "agent",
+      "pattern": "@builtin$",
+      "reason": "Built-in plugins ship inside the CLI."
+    }
+  ],
+  "reminders": [
+    "Skills: init.skills leaves out `user-invocable: false` skills, but the model still gets them. ONLY APP with that frontmatter is correct in the app.",
+    "Skills: init.skills is taken at startup, so nested skills (source `nested`) never appear there even when the target is inside their directory. Confirm them from the docs, not the diff.",
+    "MCP: `claude -p` connects every .mcp.json server whether or not it is approved, so ONLY <AGENT> rows for .mcp.json servers are not evidence the app's `unapproved` state is wrong. See notes.md."
+  ]
+}

@@ -32,7 +32,15 @@ PreToolUse:Read, ...). Read them before running on an unfamiliar folder.
 
 ## Limits
 
-- Headless sessions don't prompt, so `.mcp.json` servers that would ask for
-  approval interactively may just be absent from `mcpServers`.
+- **MCP approval can't be read from the CLI yet.** `claude -p` connects every
+  `.mcp.json` server, approved or not (seen on 2.1.280). `claude mcp list`
+  hides disabled servers but shows every other `.mcp.json` server as "Pending
+  approval", even ones listed in `enabledMcpjsonServers` in project or local
+  settings — probably because the folder was never trusted interactively.
+  Check `enabled` / `disabled` / `unapproved` against the MCP docs instead.
+- `init.skills` is taken at startup, so nested skills and anything loaded
+  after reading the target never show up there.
+- The debug log's `Loaded N unique skills (... legacy commands: N)` line is
+  the only place `.claude/commands` entries show up.
 - The user's own `~/.claude` is part of both views; findings that depend on
   it say so.

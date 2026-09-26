@@ -22,7 +22,15 @@ its docs.
 - `target`: file or directory inside it — what you'd select in the app's
   file tree. Default: the folder itself.
 
-One target proves little. Unless the user named one, run at least:
+One target proves little. For a full check, build the fixture — a throwaway
+project with every surface the app resolves, harmless hooks and dead MCP
+servers — and run its targets (listed in its `FIXTURE.md`):
+
+```bash
+node .claude/skills/validate-app/scripts/make-fixture.mjs <scratchpad>/kitchen-sink --force
+```
+
+For a real project, unless the user named a target, run at least:
 
 1. the folder itself (directory target), and
 2. a file in a subdirectory that has its own instruction file, rules with
@@ -37,9 +45,10 @@ this repo does.
 ```
 scripts/app-view.mjs     what the app shows (shared)
 scripts/compare.mjs      diffs the app against any adapter's view (shared)
+scripts/make-fixture.mjs builds a project that exercises every surface (shared)
 agents/<id>/view.mjs     runs the agent headless, prints the common view
 agents/<id>/notes.md     how the adapter works, what to trust, docs, limits
-agents/<id>/known-gaps.md  accepted differences + last version validated
+agents/<id>/ignore.json   accepted differences + last version validated
 ```
 
 ## Before you start
@@ -49,7 +58,7 @@ agents/<id>/known-gaps.md  accepted differences + last version validated
    to validate. Say so.
 2. If `agents/<id>/` doesn't exist for a supported agent, the adapter is
    missing. Offer to write one per **Adapter contract** below, then continue.
-3. Read `agents/<id>/notes.md` and `agents/<id>/known-gaps.md`.
+3. Read `agents/<id>/notes.md` and `agents/<id>/ignore.json`.
 
 ## Steps
 
@@ -94,7 +103,7 @@ For each ONLY row, find the cause before labelling it. Look at the real file
 | **WRONG** | The app shows it, but the agent doesn't load it — or loads it differently (layer, state, loading mode, shadowing, permission verdict). |
 | **MISSING** | The agent loads it from a surface the app already models, but the app doesn't show it. |
 | **NEW** | The agent loads it from a surface the app doesn't model at all (a new config location, plugin kind, connector type). |
-| **EXPECTED** | Matches a rule in `agents/<id>/known-gaps.md`. Not reported, only counted. |
+| **EXPECTED** | Matched by `agents/<id>/ignore.json` (`compare` counts these as "ignored") or explained by one of its `reminders`. Not reported, only counted. |
 
 Then check what the diff can't see, reading config files directly against
 the docs listed in `notes.md`:
@@ -112,7 +121,8 @@ the docs listed in `notes.md`:
 
 ### 4. Sweep for new surfaces
 
-Compare the adapter's `version` with the one in `known-gaps.md`. If it is
+Compare the adapter's `version` with `validatedVersion` in `ignore.json`
+(`compare` prints a NOTE when they differ). If it is
 newer, find the changelog entries between the two (`notes.md` says where;
 for a subagent, pass an explicit model — `sonnet` at low effort is enough)
 that touch where the agent reads instructions, memory, settings, permissions,
@@ -135,8 +145,8 @@ finding, most user-visible first:
   renderer) that would change.
 
 Don't change the resolver unless the user asks — this skill reports.
-Offer to add accepted differences to `known-gaps.md` and bump its version
-line; edit it only after the user agrees.
+Offer to add accepted differences to `ignore.json` and bump
+`validatedVersion`; edit it only after the user agrees.
 
 ## Adapter contract
 
@@ -170,8 +180,23 @@ shows. Prefer machine output (init events, `--json` flags, debug logs) over
 asking the model; when you must ask, say so in `notes.md`.
 
 Each adapter folder also gets a `notes.md` (how it runs, what to trust, side
-effects, docs and changelog links, limits) and a `known-gaps.md` (accepted
-differences as rules, plus the last version validated).
+effects, docs and changelog links, limits) and an `ignore.json`:
+
+```jsonc
+{
+  "validatedVersion": "1.2.3",
+  "ignore": [
+    // side: "app" or "agent"; category: instructions | skills | agents | mcpServers | plugins
+    { "category": "skills", "side": "agent", "names": ["..."], "reason": "why this is fine" },
+    { "category": "plugins", "side": "agent", "pattern": "regex", "reason": "..." }
+  ],
+  // differences that need judgment, not a name match; printed after the diff
+  "reminders": ["..."]
+}
+```
+
+Every entry needs a `reason`. Ignore by exact name where you can, so a
+new bundled item shows up as a difference instead of hiding under a pattern.
 
 If the app's resolver starts taking an agent, pass `--agent <id>` through to
 `app-view.mjs` too. Today it only resolves Claude Code.
