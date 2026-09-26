@@ -1,6 +1,7 @@
 import {
+  ancestorsOf,
   listDir,
-  projectClaudeDir,
+  projectDirsUpToGitRoot,
   readText,
   userClaudeDir,
   type ResolveRun,
@@ -107,6 +108,8 @@ const SKILL_PRECEDENCE: Record<SkillSource, number> = {
   personal: 2,
   synced: 2,
   project: 1,
+  // Docs (/skills): a skill wins over a legacy command of the same name.
+  command: 0,
   nested: 0,
   plugin: 0,
 };
@@ -390,6 +393,87 @@ async function collectPluginSkills(
   return out;
 }
 
+/** The id Claude Code gives a skills-dir plugin in `enabledPlugins` and its init event. */
+const SKILLS_DIR_MARKETPLACE = "skills-dir";
+
+/**
+ * Plugins living in `~/.claude/skills/<dir>`: a directory there with a
+ * `.claude-plugin/plugin.json` is also loaded as a plugin (`<name>@skills-dir`
+ * in Claude Code 2.1.280), on top of its own `SKILL.md` counting as a personal
+ * skill. Its skills come from `<dir>/skills/` and from each path the manifest
+ * lists under `skills`, both read as directories of `<name>/SKILL.md`.
+ */
+async function collectSkillsDirPlugins(
+  run: ResolveRun,
+  skillsDir: string,
+  settings: SettingsEntry[],
+): Promise<SkillEntry[]> {
+  const out: SkillEntry[] = [];
+  const seen = new Set<string>();
+  for (const dirName of await subdirectories(run, skillsDir)) {
+    if (dirName === "synced" || dirName.startsWith(".")) continue;
+    const dir = run.p.join(skillsDir, dirName);
+    const manifest = await readJsonFile(run, run.p.join(dir, ".claude-plugin", "plugin.json"));
+    if (!manifest) continue;
+    const name = typeof manifest["name"] === "string" && manifest["name"] ? manifest["name"] : dirName;
+    if (pluginEnabledSetting(`${name}@${SKILLS_DIR_MARKETPLACE}`, settings) === false) continue;
+
+    const roots = [run.p.join(dir, "skills")];
+    for (const extra of stringList(manifest["skills"])) roots.push(run.p.resolve(dir, extra));
+    for (const root of roots) {
+      for (const skill of await collectSkillsFrom(run, {
+        root,
+        layer: "user",
+        source: "plugin",
+        namespace: `${name}:`,
+        plugin: name,
+      })) {
+        if (seen.has(skill.path)) continue;
+        seen.add(skill.path);
+        out.push(skill);
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Legacy `.claude/commands/**\/*.md`, which Claude Code still loads alongside
+ * skills. A command is named after its file, prefixed by its subfolders:
+ * `commands/sub/deep.md` is `sub:deep` (Claude Code 2.1.280).
+ */
+async function collectCommandsFrom(
+  run: ResolveRun,
+  root: string,
+  layer: ConfigLayer,
+): Promise<SkillEntry[]> {
+  const out: SkillEntry[] = [];
+  const walk = async (dir: string, prefix: string): Promise<void> => {
+    const entries = [...(await listDir(run, dir))].sort((a, b) =>
+      a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
+    );
+    for (const entry of entries) {
+      const path = run.p.join(dir, entry.name);
+      if (entry.isDirectory) {
+        await walk(path, `${prefix}${entry.name}:`);
+        continue;
+      }
+      if (!entry.name.toLowerCase().endsWith(".md")) continue;
+      const content = await readText(run, path);
+      if (content === null) continue;
+      const name = `${prefix}${entry.name.replace(/\.md$/i, "")}`;
+      const skill: SkillEntry = { path, layer, name, shortName: name, source: "command" };
+      const description = parseFrontmatter(content)["description"];
+      if (description) skill.description = description;
+      const allowedTools = listField(frontmatterBody(content), "allowed-tools");
+      if (allowedTools) skill.allowedTools = allowedTools;
+      out.push(skill);
+    }
+  };
+  await walk(root, "");
+  return out;
+}
+
 /**
  * `<subdir>/.claude/skills/<name>/SKILL.md` for every directory between the
  * project root and the target. Docs (/skills): skills below where the session
@@ -452,15 +536,18 @@ function markShadowed<T extends { path: string; layer: ConfigLayer }>(
 }
 
 /**
- * Skills from `~/.claude/skills` (including `synced/`), the project's
- * `.claude/skills`, every `.claude/skills` between the project root and the
- * target, and plugins under `~/.claude/plugins`.
+ * Skills from `~/.claude/skills` (including `synced/` and plugins kept
+ * there), `.claude/skills` in the project folder and every folder above it up
+ * to the git root, every `.claude/skills` between the project root and the
+ * target, plugins under `~/.claude/plugins`, and legacy `.claude/commands`
+ * from the same places as user and project skills.
  */
 export async function collectSkills(
   run: ResolveRun,
   settings: SettingsEntry[] = [],
 ): Promise<SkillEntry[]> {
   const userSkills = run.p.join(userClaudeDir(run), "skills");
+  const projectDirs = projectDirsUpToGitRoot(run);
   const out: SkillEntry[] = [
     ...(await collectSkillsFrom(run, {
       root: userSkills,
@@ -469,14 +556,25 @@ export async function collectSkills(
       skip: ["synced"],
     })),
     ...(await collectSyncedSkills(run, userSkills)),
-    ...(await collectSkillsFrom(run, {
-      root: run.p.join(projectClaudeDir(run), "skills"),
-      layer: "project",
-      source: "project",
-    })),
+  ];
+  for (const dir of projectDirs) {
+    out.push(
+      ...(await collectSkillsFrom(run, {
+        root: run.p.join(dir, ".claude", "skills"),
+        layer: "project",
+        source: "project",
+      })),
+    );
+  }
+  out.push(
     ...(await collectNestedSkills(run)),
     ...(await collectPluginSkills(run, settings)),
-  ];
+    ...(await collectSkillsDirPlugins(run, userSkills, settings)),
+    ...(await collectCommandsFrom(run, run.p.join(userClaudeDir(run), "commands"), "user")),
+  );
+  for (const dir of projectDirs) {
+    out.push(...(await collectCommandsFrom(run, run.p.join(dir, ".claude", "commands"), "project")));
+  }
 
   markShadowed(
     out,
@@ -562,16 +660,17 @@ async function collectAgentsFrom(
   return out;
 }
 
-/** Subagents from `~/.claude/agents` then `<folder>/.claude/agents`. */
+/**
+ * Subagents from `~/.claude/agents`, then `.claude/agents` in the project
+ * folder and every folder above it up to the git root.
+ */
 export async function collectAgents(run: ResolveRun): Promise<AgentEntry[]> {
   const out = [
     ...(await collectAgentsFrom(run, run.p.join(userClaudeDir(run), "agents"), "user")),
-    ...(await collectAgentsFrom(
-      run,
-      run.p.join(projectClaudeDir(run), "agents"),
-      "project",
-    )),
   ];
+  for (const dir of projectDirsUpToGitRoot(run)) {
+    out.push(...(await collectAgentsFrom(run, run.p.join(dir, ".claude", "agents"), "project")));
+  }
 
   markShadowed(
     out,
@@ -714,7 +813,9 @@ function readServerMap(
 }
 
 /**
- * MCP servers from `~/.claude.json` (user + per-project) and `<folder>/.mcp.json`.
+ * MCP servers from `~/.claude.json` (user + per-project) and `.mcp.json` in
+ * the project folder and every folder above it, up to but not including the
+ * filesystem root (Claude Code 2.1.280 reads them past the git root too).
  *
  * User-scoped servers are already the user's own choice, so they are always
  * enabled; `.mcp.json` servers carry the approval state the settings files give
@@ -742,9 +843,11 @@ export async function collectMcpServers(
     );
   }
 
-  const projectConfigPath = run.p.join(run.folder, ".mcp.json");
-  const projectConfig = await readJsonFile(run, projectConfigPath);
-  if (projectConfig) {
+  const dirs = ancestorsOf(run.p, run.folder);
+  for (const dir of dirs.slice(0, Math.max(1, dirs.length - 1))) {
+    const projectConfigPath = run.p.join(dir, ".mcp.json");
+    const projectConfig = await readJsonFile(run, projectConfigPath);
+    if (!projectConfig) continue;
     out.push(
       ...readServerMap(
         projectConfig["mcpServers"],

@@ -120,12 +120,15 @@ export interface HookEntry extends ConfigSource {
  * - `personal`: `~/.claude/skills/<name>/SKILL.md`
  * - `synced`: `~/.claude/skills/synced/<id>/<name>/SKILL.md`, synced from
  *   claude.ai; loads like a personal skill.
- * - `project`: `<folder>/.claude/skills/<name>/SKILL.md`
+ * - `project`: `.claude/skills/<name>/SKILL.md` in the project folder or any
+ *   folder above it up to the git root
  * - `nested`: `<subdir>/.claude/skills/<name>/SKILL.md` for a directory below
  *   the project root; loads once Claude touches a file there.
- * - `plugin`: `~/.claude/plugins/**​/<plugin>/skills/<name>/SKILL.md`
+ * - `plugin`: `~/.claude/plugins/**​/<plugin>/skills/<name>/SKILL.md`, or a
+ *   plugin kept in `~/.claude/skills/<dir>` (one with `.claude-plugin/plugin.json`)
+ * - `command`: a legacy `.claude/commands/<name>.md`, user or project
  */
-export type SkillSource = "personal" | "synced" | "project" | "nested" | "plugin";
+export type SkillSource = "personal" | "synced" | "project" | "nested" | "plugin" | "command";
 
 /** The file that won a name collision, and the layer it came from. */
 export type ShadowedBy = ConfigSource;

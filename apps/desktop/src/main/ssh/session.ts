@@ -47,7 +47,7 @@ while IFS= read -r line; do
     list)
       if [ -d "$p" ] && [ -r "$p" ]; then
         printf 'ok\\t'
-        find "$p" -mindepth 1 -maxdepth 1 \\( -type d -exec printf 'd\\t%s\\n' {} + \\) -o -exec printf 'f\\t%s\\n' {} + 2>/dev/null | b64
+        find -L "$p" -mindepth 1 -maxdepth 1 \\( -type d -exec printf 'd\\t%s\\n' {} + \\) -o -exec printf 'f\\t%s\\n' {} + 2>/dev/null | b64
         printf '\\n'
       else printf 'missing\\t\\n'; fi ;;
     tree)
