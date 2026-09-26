@@ -14,9 +14,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "agentpov — see your folder the way your agent does",
+  title: "agentpov — see your project from your agent’s point of view",
   description:
-    "A desktop app that shows which CLAUDE.md files, memory, settings, permission rules, hooks, skills, agents and MCP servers actually affect a given file.",
+    "A desktop app that shows the instructions, memory, permission rules, hooks, skills, subagents and MCP servers your coding agent works with for any file or folder.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

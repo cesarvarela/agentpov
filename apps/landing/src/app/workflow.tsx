@@ -25,7 +25,7 @@ const steps: Step[] = [
   },
   {
     title: "Select a file",
-    body: "See the CLAUDE.md files, memory, permission rules and hooks that apply to exactly that path, and how each one loads.",
+    body: "See the instructions, memory, permission rules and hooks that apply to exactly that path, and how each one loads.",
     image: pickFile,
     alt: "The context for packages/core/src/memory.ts: instructions, memory files, permissions and hooks",
   },
