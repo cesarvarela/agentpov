@@ -319,10 +319,14 @@ describe("permission globs (fixture: permissions-globs)", () => {
     expect(await matches("Edit(./src/generated/*)", "src", "directory")).toBe(true);
   });
 
-  it("anchors a root-level `*.env` pattern at the project root", async () => {
+  // Docs (/permissions, "Read and Edit"): bare filenames follow gitignore and
+  // match at any depth — `Read(*.env)` blocks every `*.env` at any depth. This
+  // used to assert the pattern stayed at the root.
+  it("matches a slash-less `*.env` pattern at any depth", async () => {
     expect(await matches("Read(*.env)", ".env")).toBe(true);
     expect(await matches("Read(*.env)", "prod.env")).toBe(true);
-    expect(await matches("Read(*.env)", "src/.env")).toBe(false);
+    expect(await matches("Read(*.env)", "src/.env")).toBe(true);
+    expect(await matches("Read(*.env)", "src/a.ts")).toBe(false);
   });
 
   it("reads `//path` as filesystem-absolute", async () => {
@@ -459,5 +463,167 @@ describe("gitignore-style depth for deny and ask", () => {
 
     const multi = await resolve(files("deny", "src/web/**"), "src/api/a.ts");
     expect(view(multi, "Read(src/web/**)").matchesFile).toBe(false);
+  });
+});
+
+describe("bare names match at any depth (gitignore)", () => {
+  const files = (decision: "deny" | "allow", specifier: string) => ({
+    [`${FOLDER}/.claude/settings.json`]: JSON.stringify({
+      permissions: { [decision]: [`Read(${specifier})`] },
+    }),
+  });
+
+  it("treats `.env` like `**/.env` in allow and deny rules", async () => {
+    for (const decision of ["deny", "allow"] as const) {
+      const deep = await resolve(files(decision, ".env"), "src/api/.env");
+      expect(view(deep, "Read(.env)").matchesFile, decision).toBe(true);
+    }
+    const anchored = await resolve(files("deny", "./.env"), "src/api/.env");
+    expect(view(anchored, "Read(./.env)").matchesFile).toBe(false);
+  });
+
+  it("lets a wildcard-free name cover a directory of that name", async () => {
+    const ctx = await resolve(files("deny", "secrets"), "lib/secrets/key.pem");
+    expect(view(ctx, "Read(secrets)").matchesFile).toBe(true);
+  });
+});
+
+describe("gitignore negation (`!`) in deny and ask lists", () => {
+  const files = (deny: string[]) => ({
+    [`${FOLDER}/.claude/settings.json`]: JSON.stringify({ permissions: { deny } }),
+  });
+
+  it("carves a file out of the earlier rules in the same list", async () => {
+    const sample = await resolve(files(["Read(*.env)", "Read(!sample.env)"]), "src/sample.env");
+    const carved = sample.permissions.find((rule) => rule.rule === "Read(*.env)")!;
+    expect(carved).toMatchObject({ matchesFile: false, carvedOutBy: "Read(!sample.env)" });
+    // The negation itself denies nothing.
+    expect(view(sample, "Read(!sample.env)").matchesFile).toBe(false);
+
+    const prod = await resolve(files(["Read(*.env)", "Read(!sample.env)"]), "prod.env");
+    expect(view(prod, "Read(*.env)").matchesFile).toBe(true);
+  });
+
+  it("carves nothing when listed first", async () => {
+    const ctx = await resolve(files(["Read(!sample.env)", "Read(*.env)"]), "sample.env");
+    expect(view(ctx, "Read(*.env)").matchesFile).toBe(true);
+  });
+
+  it("can't reopen a file inside a directory blocked as a whole", async () => {
+    const ctx = await resolve(
+      files(["Read(secrets/**)", "Read(!secrets/public/**)"]),
+      "secrets/public/a.txt",
+    );
+    expect(view(ctx, "Read(secrets/**)").matchesFile).toBe(true);
+  });
+
+  it("can't reach a rule anchored with `~/`, `/` or `//`, or another file's rules", async () => {
+    const anchored = await resolve(
+      files([`Read(//${FOLDER.slice(1)}/**/*.env)`, "Read(!sample.env)"]),
+      "sample.env",
+    );
+    expect(anchored.permissions[0]?.matchesFile).toBe(true);
+
+    const otherFile = await resolve(
+      {
+        [`${HOME}/.claude/settings.json`]: JSON.stringify({ permissions: { deny: ["Read(*.env)"] } }),
+        [`${FOLDER}/.claude/settings.json`]: JSON.stringify({
+          permissions: { deny: ["Read(!sample.env)"] },
+        }),
+      },
+      "sample.env",
+    );
+    expect(view(otherFile, "Read(*.env)").matchesFile).toBe(true);
+  });
+});
+
+describe("rules Claude Code drops", () => {
+  it("ignores non-managed rules under allowManagedPermissionRulesOnly", async () => {
+    const ctx = await resolve(
+      {
+        "/etc/claude-code/managed-settings.json": JSON.stringify({
+          allowManagedPermissionRulesOnly: true,
+          permissions: { allow: ["Read(./src/**)"] },
+        }),
+        [`${HOME}/.claude/settings.json`]: JSON.stringify({
+          permissions: { deny: ["Read(./src/**)"] },
+        }),
+      },
+      "src/index.ts",
+    );
+    const user = ctx.permissions.find((rule) => rule.layer === "user")!;
+    expect(user.ignored).toMatch(/allowManagedPermissionRulesOnly/);
+    // Still computed, so the UI can say it would have matched.
+    expect(user.matchesFile).toBe(true);
+    expect(user.overridden).toBe(false);
+    // The ignored deny doesn't beat the managed allow.
+    expect(view(ctx, "Read(./src/**)", "managed")).toMatchObject({ overridden: false });
+    expect(ctx.permissions.find((rule) => rule.layer === "managed")?.ignored).toBeUndefined();
+  });
+
+  it("ignores the lock outside managed settings", async () => {
+    const ctx = await resolve(
+      {
+        [`${FOLDER}/.claude/settings.json`]: JSON.stringify({
+          allowManagedPermissionRulesOnly: true,
+          permissions: { deny: ["Read(./src/**)"] },
+        }),
+      },
+      "src/index.ts",
+    );
+    expect(ctx.permissions[0]?.ignored).toBeUndefined();
+  });
+
+  it("ignores path rules for Write, NotebookEdit, MultiEdit and Glob, but not bare names", async () => {
+    const ctx = await resolve(
+      {
+        [`${FOLDER}/.claude/settings.json`]: JSON.stringify({
+          permissions: {
+            allow: ["Edit(./src/**)"],
+            deny: ["Write(./src/**)", "NotebookEdit(./src/**)", "MultiEdit(./src/**)", "Glob(./src/**)", "Write"],
+          },
+        }),
+      },
+      "src/index.ts",
+    );
+    for (const text of ["Write(./src/**)", "NotebookEdit(./src/**)", "MultiEdit(./src/**)", "Glob(./src/**)"]) {
+      expect(ctx.permissions.find((rule) => rule.rule === text)?.ignored, text).toMatch(
+        /never consults/,
+      );
+    }
+    expect(ctx.permissions.find((rule) => rule.rule === "Write")?.ignored).toBeUndefined();
+    // The ignored `Write(./src/**)` deny doesn't override anything.
+    expect(view(ctx, "Edit(./src/**)")).toMatchObject({ overridden: false });
+  });
+});
+
+describe("a Read deny also blocks Edit and Write", () => {
+  it("overrides an Edit allow on the same path", async () => {
+    const ctx = await resolve(
+      {
+        [`${FOLDER}/.claude/settings.json`]: JSON.stringify({
+          permissions: { allow: ["Edit(./src/**)", "Edit(./docs/**)"], deny: ["Read(./src/secret.ts)"] },
+        }),
+      },
+      "src/secret.ts",
+    );
+    expect(view(ctx, "Edit(./src/**)")).toMatchObject({ overridden: true, overriddenBy: "project" });
+    expect(view(ctx, "Edit(./docs/**)")).toMatchObject({ overridden: false });
+  });
+});
+
+describe("managed `/path` anchor", () => {
+  it("anchors at the directory of the managed settings file in use", async () => {
+    const ctx = await resolveContext("/opt/policy", "docs/a.md", {
+      fs: memfs({
+        "/opt/policy/managed-settings.json": JSON.stringify({
+          permissions: { deny: ["Read(/docs/**)"] },
+        }),
+      }),
+      homeDir: HOME,
+      platform: "linux",
+      managedSettingsPath: "/opt/policy/managed-settings.json",
+    });
+    expect(view(ctx, "Read(/docs/**)", "managed").matchesFile).toBe(true);
   });
 });

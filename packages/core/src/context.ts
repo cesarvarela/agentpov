@@ -7,6 +7,8 @@ export interface ResolveRun {
   p: PathApi;
   platform: NodeJS.Platform;
   homeDir: string;
+  /** `CLAUDE_CONFIG_DIR` when set; `undefined` means `<homeDir>/.claude`. */
+  configDir?: string;
   /** Absolute, normalised project folder. */
   folder: string;
   /** Absolute, normalised target: a file, or a directory when `targetKind` says so. */
@@ -33,15 +35,24 @@ export interface ResolveRun {
 
 const MANAGED_DIRS: Record<string, string> = {
   darwin: "/Library/Application Support/ClaudeCode",
-  win32: "C:\\ProgramData\\ClaudeCode",
+  // Docs (/managed-settings): the legacy C:\\ProgramData path is no longer read.
+  win32: "C:\\Program Files\\ClaudeCode",
 };
 
 export function managedDirFor(platform: NodeJS.Platform): string {
   return MANAGED_DIRS[platform] ?? "/etc/claude-code";
 }
 
+/** `~/.claude`, or `CLAUDE_CONFIG_DIR` when set. */
 export function userClaudeDir(run: ResolveRun): string {
-  return run.p.join(run.homeDir, ".claude");
+  return run.configDir ?? run.p.join(run.homeDir, ".claude");
+}
+
+/** `~/.claude.json`, or `$CLAUDE_CONFIG_DIR/.claude.json` when set. */
+export function userConfigJsonPath(run: ResolveRun): string {
+  return run.configDir
+    ? run.p.join(run.configDir, ".claude.json")
+    : run.p.join(run.homeDir, ".claude.json");
 }
 
 export function projectClaudeDir(run: ResolveRun): string {

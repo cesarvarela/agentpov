@@ -28,14 +28,17 @@ them says what it tests; hooks only log to `.hooks.log` and MCP servers never
 connect, so running an agent there is harmless.
 
 ```bash
-node $V/scripts/make-fixture.mjs $S/kitchen-sink --force
+node $V/scripts/make-fixture.mjs $S/kitchen-sink --config $S/config --force
 node $V/scripts/make-fixture.mjs $S/nested --nested --force
+node $V/scripts/make-fixture.mjs $S/agents-md --agents-md --force
 ```
 
 | Fixture | Folder | Targets |
 |---|---|---|
 | kitchen-sink: a standalone project with every surface the app resolves | `$S/kitchen-sink` | the folder (`--dir`), `src/api/handler.ts`, `src/web/page.ts`, `src/legacy/old.ts`, `secrets/public.txt` |
 | nested: the same project at `app/` inside an outer repo that has one of each surface | `$S/nested/app` | the folder (`--dir`), `secrets/key.txt` |
+| agents-md: instructions only in `AGENTS.md` files, no CLAUDE.md anywhere | `$S/agents-md` | the folder (`--dir`), `pkg/index.ts`, `mixed/index.ts` |
+| config: an isolated `CLAUDE_CONFIG_DIR` with an installed plugin shipping every component, a disabled plugin, a user skills-dir plugin, and user skills, agents, CLAUDE.md, output style, workflow | pass `--config-dir $S/config` to both views | run it against kitchen-sink |
 
 The nested fixture checks a project opened below its repo root. Anything of
 the outer repo that Claude Code loads and the app doesn't is a finding.
@@ -86,10 +89,12 @@ pnpm -F @agentpov/core build
 ### 2. Collect both views
 
 ```bash
-node $V/scripts/app-view.mjs <folder> [target] [--dir] > $S/app.json
-node $V/agents/<id>/view.mjs <folder> [target] > $S/agent.json
+node $V/scripts/app-view.mjs <folder> [target] [--dir] [--config-dir <dir>] > $S/app.json
+node $V/agents/<id>/view.mjs <folder> [target] [--config-dir <dir>] > $S/agent.json
 node $V/scripts/compare.mjs $S/app.json $S/agent.json
 ```
+
+Pass the same `--config-dir` to both, or neither: it swaps the user layer.
 
 - `app-view` makes the same `resolveContext` call the desktop main process
   makes. Pass `--dir` when the target is a directory.

@@ -378,10 +378,11 @@ describe("resolveContext", () => {
       expect(matches("Read(src/api)")).toBe(true);
       expect(matches("Read(src)")).toBe(true);
       expect(matches("Read(**/*.env)")).toBe(true);
+      // Docs (/permissions): a pattern with no slash matches at any depth.
+      expect(matches("Read(*.ts)")).toBe(true);
       // Siblings, shallower paths and non-file tools stay out.
       expect(matches("Read(src/web/**)")).toBe(false);
       expect(matches("Read(src/api.ts)")).toBe(false);
-      expect(matches("Read(*.ts)")).toBe(false);
       expect(matches("Read(//etc/hosts)")).toBe(false);
       expect(matches("Bash(ls src/api)")).toBe(false);
     });

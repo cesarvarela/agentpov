@@ -83,8 +83,16 @@ if (app.targetKind === "file") {
 }
 
 const skillId = (s) => (s.source === "personal" || s.source === "project" ? s.shortName : s.name);
-const appSkills = app.skills.filter((s) => !s.shadowedBy);
-section("Skills", appSkills.filter((s) => s.source !== "command").map(skillId), view.skills, null, "skills");
+const appSkills = app.skills.filter((s) => !s.shadowedBy && !s.disabled);
+// Saved workflows are invocable like skills, and Claude Code lists them there.
+const appWorkflows = (app.workflows ?? []).filter((w) => !w.shadowedBy && !w.disabled).map((w) => w.name);
+section(
+  "Skills (and workflows)",
+  [...appSkills.filter((s) => s.source !== "command").map(skillId), ...appWorkflows],
+  view.skills,
+  appWorkflows.length ? `app workflows included: ${appWorkflows.join(", ")}` : null,
+  "skills",
+);
 section(
   "Legacy commands",
   appSkills.filter((s) => s.source === "command").map((s) => s.name),
@@ -93,7 +101,13 @@ section(
   "commands",
 );
 
-section("Subagents", app.agents.filter((a) => !a.shadowedBy).map((a) => a.name), view.agents, null, "agents");
+section(
+  "Subagents",
+  app.agents.filter((a) => !a.shadowedBy && !a.disabled).map((a) => a.name),
+  view.agents,
+  null,
+  "agents",
+);
 
 section(
   "MCP servers (enabled)",
@@ -105,11 +119,31 @@ section(
   "mcpServers",
 );
 
-if (view.plugins) {
-  console.log(`\n## Plugins (${agent} only; compare to app plugin skills)`);
-  const plugins = view.plugins.filter((p) => !ignoredBy("plugins", "agent", p.source ?? p.name));
-  for (const p of plugins) console.log(`  - ${p.name} ${p.source ?? ""} ${p.path ?? ""}`);
-  if (plugins.length < view.plugins.length) console.log(`  (+${view.plugins.length - plugins.length} ignored)`);
+section(
+  "Plugins (enabled)",
+  (app.plugins ?? []).filter((p) => p.enabled).map((p) => p.id),
+  view.plugins?.map((p) => p.source ?? p.name),
+  view.plugins &&
+    `app roots: ${(app.plugins ?? []).filter((p) => p.enabled).map((p) => `${p.id}=${p.root ?? "?"}`).join(", ") || "-"}\n` +
+      `${agent} paths: ${view.plugins.map((p) => `${p.source}=${p.path}`).join(", ") || "-"}\n` +
+      `app not enabled: ${(app.plugins ?? []).filter((p) => !p.enabled).map((p) => `${p.id} (${p.reason})`).join("; ") || "-"}`,
+  "plugins",
+);
+
+if (app.effective && view.extra) {
+  console.log("\n## Session settings");
+  const style = app.effective.outputStyle;
+  console.log(`output style: app ${style.value}${style.source ? ` (${style.source.path})` : " (default)"} · ${agent} ${view.extra.output_style ?? "?"}`);
+  const mode = app.effective.permissionMode;
+  console.log(`permission mode: app ${mode.value}${mode.note ? ` (${mode.note})` : ""} · ${agent} ${view.extra.permissionMode ?? "?"}`);
+  console.log(`instruction files: app ${app.effective.instructionFiles.value}`);
+}
+
+if (view.extra?.instructionsLoaded?.length) {
+  console.log(`\n## ${agent} InstructionsLoaded events (exact)`);
+  for (const l of view.extra.instructionsLoaded) {
+    console.log(`  - ${l.reason} ${l.type ?? ""} ${l.path}${l.trigger ? ` ← ${l.trigger}` : ""}${l.parent ? ` ⊂ ${l.parent}` : ""}`);
+  }
 }
 
 console.log("\n## Read permission on target");

@@ -132,11 +132,15 @@ app.whenReady().then(() => {
       targetKind: TargetKind = "file",
     ): Promise<ResolvedContext> => {
       const backend = backendFor(event.sender.id);
+      // CLAUDE_CONFIG_DIR moves ~/.claude. Only this machine's env is known;
+      // an SSH host's would take a round trip, so remote uses the default.
+      const configDir = backend.host ? undefined : process.env["CLAUDE_CONFIG_DIR"];
       return resolveContext(folder, target, {
         fs: backend.fs,
         homeDir: backend.homeDir,
         platform: backend.platform,
         targetKind,
+        ...(configDir ? { configDir } : {}),
       });
     },
   );

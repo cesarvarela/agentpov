@@ -37,6 +37,19 @@ export function displayPath(
   return path;
 }
 
+/**
+ * A project location short enough for the title bar: `~` for home, then only
+ * the last `keep` segments, the rest folded into `…`
+ * (`/private/tmp/a/b/vfx/kitchen-sink` → `/…/vfx/kitchen-sink`).
+ */
+export function compactPath(path: string, homeDir: string, keep = 2): string {
+  const shown = displayPath(path, null, homeDir);
+  const prefix = shown.startsWith("~/") ? "~/" : shown.startsWith("/") ? "/" : "";
+  const segments = shown.slice(prefix.length).split("/").filter(Boolean);
+  if (segments.length <= keep + 1) return shown;
+  return `${prefix}…/${segments.slice(-keep).join("/")}`;
+}
+
 /** Same as `displayPath` but keeps the project folder name as a prefix. */
 export function projectPath(
   path: string,
@@ -48,6 +61,17 @@ export function projectPath(
     if (rel !== null && rel !== "") return `${basename(folder)}/${rel}`;
   }
   return displayPath(path, folder, homeDir);
+}
+
+/**
+ * `projectPath` for a panel row: an absolute path outside both the project and
+ * home keeps only its last three segments (`/…/config/plugins/x.json`), so the
+ * file name survives truncation. Rows carry the full path in their tooltip;
+ * don't use this for anything copied or exported.
+ */
+export function rowPath(path: string, folder: string | null, homeDir: string): string {
+  const shown = projectPath(path, folder, homeDir);
+  return shown.startsWith("/") ? compactPath(shown, "", 3) : shown;
 }
 
 const LANGUAGES: Record<string, string> = {

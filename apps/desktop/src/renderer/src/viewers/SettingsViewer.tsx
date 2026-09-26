@@ -11,7 +11,9 @@ import {
   ParseFailure,
   Section,
   SubHeading,
+  HIGHLIGHT,
   hits,
+  hitsExactly,
   hookScriptPath,
   isRecord,
   parseJson,
@@ -29,15 +31,63 @@ import type { ViewerProps } from "./types";
  * file, not the merged picture the context panels show.
  */
 
-/** Keys this viewer renders itself; the rest fall through to `Other`. */
-const HANDLED = new Set([
-  "hooks",
-  "permissions",
-  "env",
+/** Session-wide switches that change what the context panels mean. */
+const SESSION_KEYS = [
+  "outputStyle",
+  "autoMemoryEnabled",
+  "disableAllHooks",
+  "allowManagedHooksOnly",
+  "disableWorkflows",
+  "strictPluginOnlyCustomization",
+] as const;
+
+const MCP_KEYS = [
   "enableAllProjectMcpServers",
   "enabledMcpjsonServers",
   "disabledMcpjsonServers",
+  "allowedMcpServers",
+  "deniedMcpServers",
+] as const;
+
+/** Keys this viewer renders itself; the rest fall through to `Other`. */
+const HANDLED = new Set<string>([
+  "hooks",
+  "permissions",
+  "env",
+  "claudeMd",
+  "sandbox",
+  "enabledPlugins",
+  "pluginConfigs",
+  ...MCP_KEYS,
+  ...SESSION_KEYS,
 ]);
+
+/** One line per list item; `{serverName: "x"}` reads as `serverName x`. */
+function itemText(value: unknown): string {
+  if (isRecord(value)) {
+    return Object.entries(value)
+      .map(([key, inner]) => `${key} ${scalarText(inner)}`)
+      .join(", ");
+  }
+  return scalarText(value);
+}
+
+/** Nested objects as dotted keys, so `sandbox.filesystem.allowWrite` is one row. */
+function flatten(
+  value: Record<string, unknown>,
+  prefix = "",
+): [string, unknown][] {
+  const out: [string, unknown][] = [];
+  for (const [key, inner] of Object.entries(value)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (isRecord(inner) && Object.keys(inner).length > 0) {
+      out.push(...flatten(inner, path));
+    } else {
+      out.push([path, inner]);
+    }
+  }
+  return out;
+}
 
 /** Fields a hook card spells out; anything else is listed as key/value. */
 const HOOK_FIELDS = new Set(["type", "command", "prompt", "agent", "timeout"]);
@@ -182,18 +232,55 @@ export function SettingsViewer({
       ["enableAllProjectMcpServers", root["enableAllProjectMcpServers"]],
       ["enabledMcpjsonServers", root["enabledMcpjsonServers"]],
       ["disabledMcpjsonServers", root["disabledMcpjsonServers"]],
+      ["allowedMcpServers", root["allowedMcpServers"]],
+      ["deniedMcpServers", root["deniedMcpServers"]],
     ] as [string, unknown][]
   ).filter(([, value]) => value !== undefined);
 
   const env = isRecord(root["env"]) ? root["env"] : undefined;
 
+  /**
+   * A key/value line that lights up when the opener named its key (a session
+   * chip passes `"outputStyle"`, a plugin row its id). Keys match on their
+   * last dotted segment.
+   */
+  const fact = (label: string, value: unknown, keyName = label) => {
+    const last = keyName.slice(keyName.lastIndexOf(".") + 1);
+    const highlighted = hitsExactly(last, matches) || hitsExactly(keyName, matches);
+    return (
+      <div
+        key={label}
+        ref={claim(highlighted)}
+        className={`rounded-[4px] border px-1.5 ${highlighted ? HIGHLIGHT : "border-transparent"}`}
+      >
+        <KeyValue label={label}>
+          {Array.isArray(value)
+            ? value.map(itemText).join(" · ")
+            : scalarText(value)}
+        </KeyValue>
+      </div>
+    );
+  };
+
+  const sessionFacts = SESSION_KEYS.filter((key) => root[key] !== undefined);
+  const claudeMd = typeof root["claudeMd"] === "string" ? root["claudeMd"] : undefined;
+  const claudeMdHit = claudeMd !== undefined && hitsExactly("claudeMd", matches);
+  const enabledPlugins = isRecord(root["enabledPlugins"])
+    ? root["enabledPlugins"]
+    : undefined;
+  const pluginConfigs = root["pluginConfigs"];
+  const sandbox = isRecord(root["sandbox"]) ? flatten(root["sandbox"]) : [];
+
   // A handled key whose value is not the shape it should be still has to be
   // visible somewhere, so it falls through to the generic tree.
   const unusable = new Set<string>(
-    ["hooks", "permissions", "env"].filter(
+    ["hooks", "permissions", "env", "sandbox", "enabledPlugins"].filter(
       (key) => root[key] !== undefined && !isRecord(root[key]),
     ),
   );
+  if (root["claudeMd"] !== undefined && claudeMd === undefined) {
+    unusable.add("claudeMd");
+  }
   const rest = Object.fromEntries(
     Object.entries(root).filter(
       ([key]) => !HANDLED.has(key) || unusable.has(key),
@@ -327,13 +414,9 @@ export function SettingsViewer({
             ))}
             {permissionFacts.length > 0 ? (
               <div className="flex flex-col gap-0.5">
-                {permissionFacts.map(([key, value]) => (
-                  <KeyValue key={key} label={key}>
-                    {Array.isArray(value)
-                      ? stringList(value).join(", ")
-                      : scalarText(value)}
-                  </KeyValue>
-                ))}
+                {permissionFacts.map(([key, value]) =>
+                  fact(key, Array.isArray(value) ? stringList(value).join(", ") : value),
+                )}
               </div>
             ) : null}
             {Object.keys(permissionRest).length > 0 ? (
@@ -343,16 +426,55 @@ export function SettingsViewer({
         </Section>
       ) : null}
 
+      {claudeMd !== undefined ? (
+        <Section label="Managed instructions">
+          <Card highlighted={claudeMdHit} innerRef={claim(claudeMdHit)}>
+            <span className="text-om-muted text-[11px]">
+              claudeMd · loaded ahead of user and project CLAUDE.md
+            </span>
+            <pre className="text-om-text font-mono text-[11px] leading-[16px] break-words whitespace-pre-wrap">
+              {claudeMd}
+            </pre>
+          </Card>
+        </Section>
+      ) : null}
+
+      {sessionFacts.length > 0 ? (
+        <Section label="Session">
+          <div className="flex flex-col gap-0.5">
+            {sessionFacts.map((key) => fact(key, root[key]))}
+          </div>
+        </Section>
+      ) : null}
+
+      {sandbox.length > 0 ? (
+        <Section label="Bash sandbox">
+          <div className="flex flex-col gap-0.5">
+            {sandbox.map(([key, value]) => fact(key, value, key))}
+          </div>
+        </Section>
+      ) : null}
+
+      {enabledPlugins || pluginConfigs !== undefined ? (
+        <Section label="Plugins">
+          <div className="flex flex-col gap-0.5">
+            {Object.entries(enabledPlugins ?? {}).map(([id, value]) =>
+              fact(
+                id,
+                typeof value === "boolean" ? (value ? "enabled" : "disabled") : value,
+              ),
+            )}
+            {pluginConfigs !== undefined ? (
+              <JsonTree value={{ pluginConfigs }} depth={1} />
+            ) : null}
+          </div>
+        </Section>
+      ) : null}
+
       {mcpFacts.length > 0 ? (
         <Section label="MCP">
           <div className="flex flex-col gap-0.5">
-            {mcpFacts.map(([key, value]) => (
-              <KeyValue key={key} label={key}>
-                {Array.isArray(value)
-                  ? stringList(value).join(", ")
-                  : scalarText(value)}
-              </KeyValue>
-            ))}
+            {mcpFacts.map(([key, value]) => fact(key, value))}
           </div>
         </Section>
       ) : null}

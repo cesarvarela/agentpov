@@ -25,7 +25,7 @@ export function marksForName(name: string, kind: "file" | "dir"): FileMark[] {
     return marks;
   }
 
-  if (name === "CLAUDE.md" || name === "CLAUDE.local.md") {
+  if (name === "CLAUDE.md" || name === "CLAUDE.local.md" || name === "AGENTS.md") {
     marks.push("instructions");
   } else if (name.startsWith("settings") && name.endsWith(".json")) {
     marks.push("instructions");

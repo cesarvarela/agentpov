@@ -2,12 +2,18 @@ export * from "./types.js";
 export { createNodeFileSystem } from "./node-fs.js";
 
 import { locateRepository, managedDirFor, type ResolveRun } from "./context.js";
-import { collectAgents, collectMcpServers, collectSkills } from "./discovery.js";
+import { collectAgents, collectSkills } from "./discovery.js";
+import { collectEffective } from "./effective.js";
 import { collectHooks } from "./hooks.js";
+import { collectMcpServers } from "./mcp.js";
 import { collectMemory } from "./memory.js";
+import { collectOutputStyles } from "./output-styles.js";
 import { pathFor, tidy, toAbsolute } from "./paths.js";
 import { collectPermissions } from "./permissions.js";
+import { collectPlugins } from "./plugins.js";
+import { collectSandbox } from "./sandbox.js";
 import { collectSettings, managedSettingsPathFor } from "./settings.js";
+import { collectWorkflows } from "./workflows.js";
 import { type ResolvedContext, type ResolveOptions } from "./types.js";
 
 /**
@@ -47,6 +53,7 @@ export async function resolveContext(
     p,
     platform,
     homeDir: tidy(p, options.homeDir),
+    ...(options.configDir ? { configDir: toAbsolute(p, absoluteFolder, options.configDir) } : {}),
     folder: absoluteFolder,
     file: absoluteTarget,
     targetKind,
@@ -59,12 +66,17 @@ export async function resolveContext(
   };
 
   const settings = await collectSettings(run);
-  const memory = await collectMemory(run, settings);
+  const effective = collectEffective(settings);
+  const plugins = await collectPlugins(run, settings);
+  const memory = await collectMemory(run, settings, effective);
   const permissions = collectPermissions(run, settings);
-  const hooks = collectHooks(settings);
-  const skills = await collectSkills(run, settings);
-  const agents = await collectAgents(run);
-  const mcpServers = await collectMcpServers(run, settings);
+  const skills = await collectSkills(run, plugins, settings);
+  const agents = await collectAgents(run, plugins, settings);
+  const hooks = await collectHooks(run, settings, plugins, skills, agents, effective);
+  const mcpServers = await collectMcpServers(run, settings, plugins);
+  const outputStyles = await collectOutputStyles(run, plugins, effective);
+  const workflows = await collectWorkflows(run, plugins, effective);
+  const sandbox = collectSandbox(run, settings, permissions);
 
   return {
     folder: absoluteFolder,
@@ -77,6 +89,11 @@ export async function resolveContext(
     skills,
     agents,
     mcpServers,
+    plugins: plugins.map((plugin) => plugin.entry),
+    outputStyles,
+    workflows,
+    sandbox,
+    effective,
     diagnostics: run.diagnostics,
   };
 }

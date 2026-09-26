@@ -4,12 +4,14 @@ import type { FileNode } from "../../src/shared/ipc";
 import {
   ancestorDirs,
   basename,
+  compactPath,
   countNodes,
   dirname,
   displayPath,
   formatBytes,
   languageOf,
   projectPath,
+  rowPath,
   relativeTo,
 } from "../../src/renderer/src/lib/paths";
 
@@ -111,5 +113,29 @@ describe("countNodes", () => {
     };
 
     expect(countNodes(tree)).toBe(4);
+  });
+});
+
+describe("compactPath", () => {
+  it("keeps short paths whole", () => {
+    expect(compactPath("/Users/me/code/app", "/Users/me")).toBe("~/code/app");
+    expect(compactPath("/srv/app", "/Users/me")).toBe("/srv/app");
+  });
+
+  it("folds everything but the last two segments", () => {
+    expect(compactPath("/private/tmp/a/b/vfx/kitchen-sink", "/Users/me")).toBe("/…/vfx/kitchen-sink");
+    expect(compactPath("/Users/me/projects/cesar/agentview/app", "/Users/me")).toBe("~/…/agentview/app");
+  });
+});
+
+describe("rowPath", () => {
+  it("folds long absolute paths outside the project and home", () => {
+    expect(rowPath("/private/tmp/x/y/config/CLAUDE.md", FOLDER, HOME)).toBe("/…/y/config/CLAUDE.md");
+    expect(rowPath("/etc/claude/settings.json", FOLDER, HOME)).toBe("/etc/claude/settings.json");
+  });
+
+  it("leaves project and home paths alone", () => {
+    expect(rowPath(`${FOLDER}/src/a.ts`, FOLDER, HOME)).toBe("app/src/a.ts");
+    expect(rowPath(`${HOME}/.claude/a/b/c/CLAUDE.md`, FOLDER, HOME)).toBe("~/.claude/a/b/c/CLAUDE.md");
   });
 });

@@ -17,7 +17,7 @@ import {
   useSidebar,
 } from "./hooks/useSidebar";
 import { useSource } from "./hooks/useSource";
-import { displayPath } from "./lib/paths";
+import { compactPath } from "./lib/paths";
 
 const isMac = window.agentpov?.platform === "darwin";
 
@@ -153,7 +153,7 @@ export default function App() {
         appName={appName}
         folder={folder}
         host={project.host}
-        folderLabel={folder ? displayPath(folder, null, homeDir) : ""}
+        folderLabel={folder ? compactPath(folder, homeDir) : ""}
         recents={project.recents}
         opening={project.opening}
         isMac={isMac}
@@ -263,8 +263,8 @@ export default function App() {
             <span className="text-om-amber">{appName}</span>
           </h1>
           <p className="text-muted-foreground max-w-md text-sm">
-            See which CLAUDE.md files, settings, permission rules, hooks, skills,
-            agents and MCP servers affect a file.
+            See which CLAUDE.md and AGENTS.md files, settings, permission rules,
+            hooks, plugins, skills, agents and MCP servers affect a file.
           </p>
 
           <div className="flex items-center gap-2">
