@@ -1,18 +1,20 @@
 #!/usr/bin/env node
-// Builds a project that exercises every config surface agentpov resolves, so
-// validate-app has something rich to check. The committed copy lives in
-// fixtures/kitchen-sink (hidden from agentview's own tree by .agentpovignore);
-// rerun this to regenerate it after changing what it covers.
+// Builds a throwaway project that exercises every config surface agentpov
+// resolves, so validate-app has something rich to check. Build it outside any
+// git repo (the scratchpad): it gets its own `git init`, so nothing above it
+// leaks in.
 //
-// Inside another git repo it stays a plain folder, so Claude Code sees it as a
-// subfolder of that repo: ancestor CLAUDE.md files and the repo's auto-memory
-// apply. Build it outside any repo to get it as a standalone project.
+// --nested builds an outer repo at <dest> with its own CLAUDE.md, rules,
+// settings, skills and .mcp.json, and the kitchen-sink project inside it at
+// <dest>/app with no .git of its own. Open <dest>/app: whatever of the outer
+// repo Claude Code still picks up is what the app has to show for a project
+// opened below its repo root.
 //
-// Every hook only appends its event name to <dest>/.hooks.log, and every MCP
-// server points at nothing, so running an agent here is harmless. Each file
-// says in its own text what it is there to test.
+// Every hook only appends its event name to .hooks.log in the folder Claude
+// was started in, and every MCP server points at nothing, so running an agent
+// here is harmless. Each file says in its own text what it is there to test.
 //
-// Usage: node make-fixture.mjs <dest> [--force]
+// Usage: node make-fixture.mjs <dest> [--nested] [--force]
 
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -20,25 +22,28 @@ import { dirname, join, resolve } from "node:path";
 
 const args = process.argv.slice(2);
 const force = args.includes("--force");
-const destArg = args.find((a) => a !== "--force");
+const nested = args.includes("--nested");
+const destArg = args.find((a) => !a.startsWith("--"));
 if (!destArg) {
-  console.error("usage: node make-fixture.mjs <dest> [--force]");
+  console.error("usage: node make-fixture.mjs <dest> [--nested] [--force]");
   process.exit(1);
 }
-const dest = resolve(destArg);
-if (existsSync(dest) && readdirSync(dest).length > 0) {
+const root = resolve(destArg);
+if (existsSync(root) && readdirSync(root).length > 0) {
   if (!force) {
-    console.error(`${dest} is not empty; pass --force to replace it`);
+    console.error(`${root} is not empty; pass --force to replace it`);
     process.exit(1);
   }
-  rmSync(dest, { recursive: true, force: true });
+  rmSync(root, { recursive: true, force: true });
 }
+const dest = nested ? join(root, "app") : root;
 
-const write = (rel, body) => {
-  const path = join(dest, rel);
+const writeIn = (base) => (rel, body) => {
+  const path = join(base, rel);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, typeof body === "string" ? body : JSON.stringify(body, null, 2) + "\n");
 };
+const write = writeIn(dest);
 const md = (lines) => lines.join("\n") + "\n";
 const skill = (name, description, extra = []) =>
   md(["---", `name: ${name}`, `description: ${description}`, ...extra, "---", "", `# ${name}`, "", description]);
@@ -140,11 +145,29 @@ write("FIXTURE.md", md([
 ]));
 write(".gitignore", ".hooks.log\n");
 
-let insideRepo = true;
-try {
-  execFileSync("git", ["rev-parse", "--is-inside-work-tree"], { cwd: dest, stdio: "ignore" });
-} catch {
-  insideRepo = false;
+if (nested) {
+  // The outer repo: one of each surface, so the diff shows which ones Claude
+  // Code still reads when it starts in <root>/app.
+  const outer = writeIn(root);
+  outer("CLAUDE.md", md(["Fixture: outer repo CLAUDE.md, above the opened folder."]));
+  outer("CLAUDE.local.md", md(["Fixture: outer repo CLAUDE.local.md, above the opened folder."]));
+  outer(".claude/CLAUDE.md", md(["Fixture: outer repo .claude/CLAUDE.md, above the opened folder."]));
+  outer(".claude/rules/outer-rule.md", md(["Fixture: outer repo rule, above the opened folder."]));
+  outer(".claude/skills/outer-skill/SKILL.md", skill("outer-skill", "Fixture: outer repo skill, above the opened folder."));
+  outer(".claude/agents/outer-agent.md", md(["---", "name: outer-agent", "description: Fixture: outer repo subagent.", "---", "Fixture."]));
+  outer(".claude/settings.json", {
+    permissions: { deny: ["Read(./app/secrets/**)", "Bash(rm:*)"] },
+    hooks: { SessionStart: [{ hooks: [{ type: "command", command: log("Outer:SessionStart") }] }] },
+    enabledMcpjsonServers: ["outer-server"],
+  });
+  outer(".mcp.json", { mcpServers: { "outer-server": { type: "http", url: "http://127.0.0.1:9/outer" } } });
+  outer(".gitignore", ".hooks.log\n**/.hooks.log\n");
+  outer("FIXTURE.md", md([
+    "# nested fixture",
+    "",
+    "Outer repo with the kitchen-sink project in app/. Open app/, not this folder.",
+  ]));
 }
-if (!insideRepo) execFileSync("git", ["init", "-q"], { cwd: dest });
+
+execFileSync("git", ["init", "-q"], { cwd: root });
 console.log(dest);

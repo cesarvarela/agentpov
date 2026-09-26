@@ -22,20 +22,23 @@ its docs.
 - `target`: file or directory inside it — what you'd select in the app's
   file tree. Default: the folder itself.
 
-One target proves little. For a full check, use the fixture in
-`fixtures/kitchen-sink` — a project with every surface the app resolves,
-hooks that only log to `.hooks.log`, and MCP servers that never connect —
-and run the targets listed in its `FIXTURE.md`. `.agentpovignore` hides
-`fixtures/` from agentview's own tree.
-
-Because it sits inside this repo, Claude Code also sees this repo's
-`CLAUDE.md` and auto-memory from there. Those rows are real app gaps (the app
-doesn't look above the opened folder), not fixture noise. For a standalone
-copy, or to regenerate the committed one after changing what it covers:
+One target proves little. For a full check, build both fixtures fresh in the
+scratchpad — never inside a repo, or that repo leaks into them. Each file in
+them says what it tests; hooks only log to `.hooks.log` and MCP servers never
+connect, so running an agent there is harmless.
 
 ```bash
-node .claude/skills/validate-app/scripts/make-fixture.mjs <dest> --force
+node $V/scripts/make-fixture.mjs $S/kitchen-sink --force
+node $V/scripts/make-fixture.mjs $S/nested --nested --force
 ```
+
+| Fixture | Folder | Targets |
+|---|---|---|
+| kitchen-sink: a standalone project with every surface the app resolves | `$S/kitchen-sink` | the folder (`--dir`), `src/api/handler.ts`, `src/web/page.ts`, `secrets/public.txt` |
+| nested: the same project at `app/` inside an outer repo that has one of each surface | `$S/nested/app` | the folder (`--dir`), `secrets/key.txt` |
+
+The nested fixture checks a project opened below its repo root. Anything of
+the outer repo that Claude Code loads and the app doesn't is a finding.
 
 For a real project, unless the user named a target, run at least:
 
