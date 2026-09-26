@@ -5,17 +5,83 @@
       "category": "skills",
       "side": "agent",
       "names": [
-        "artifact-capabilities", "artifact-diagramming", "batch", "claude-api", "code-review",
-        "dataviz", "debug", "deep-research", "design", "design-sync", "doctor",
-        "fewer-permission-prompts", "loop", "run", "run-skill-generator", "schedule", "simplify",
-        "slides", "update-config", "verify", "workflow-authoring"
+        "artifact-capabilities",
+        "artifact-diagramming",
+        "batch",
+        "claude-api",
+        "code-review",
+        "dataviz",
+        "debug",
+        "deep-research",
+        "design",
+        "design-sync",
+        "doctor",
+        "fewer-permission-prompts",
+        "loop",
+        "run",
+        "run-skill-generator",
+        "schedule",
+        "simplify",
+        "slides",
+        "update-config",
+        "verify",
+        "workflow-authoring"
       ],
       "reason": "Bundled in the CLI binary; no SKILL.md on disk for the app to point at."
     },
     {
+      "category": "commands",
+      "side": "agent",
+      "names": [
+        "__remote-workflow",
+        "advisor",
+        "agents",
+        "auto-mode-setup",
+        "autocompact",
+        "clear",
+        "color",
+        "compact",
+        "config",
+        "context",
+        "design-consent",
+        "design-revoke",
+        "effort",
+        "extra-usage",
+        "fast",
+        "goal",
+        "heapdump",
+        "import",
+        "init",
+        "insights",
+        "list-agents",
+        "mcp",
+        "model",
+        "output-style",
+        "recap",
+        "reload-plugins",
+        "reload-skills",
+        "rename",
+        "security-review",
+        "skill-doctor",
+        "team-onboarding",
+        "ultrareview",
+        "usage",
+        "usage-credits",
+        "workflow-launch-exec"
+      ],
+      "reason": "Built-in CLI commands; no command file on disk."
+    },
+    {
       "category": "agents",
       "side": "agent",
-      "names": ["claude", "claude-code-guide", "Explore", "general-purpose", "Plan", "statusline-setup"],
+      "names": [
+        "claude",
+        "claude-code-guide",
+        "Explore",
+        "general-purpose",
+        "Plan",
+        "statusline-setup"
+      ],
       "reason": "Built-in subagents; no .md file on disk."
     },
     {
@@ -23,6 +89,12 @@
       "side": "agent",
       "pattern": "@builtin$",
       "reason": "Built-in plugins ship inside the CLI."
+    },
+    {
+      "category": "mcpServers",
+      "side": "agent",
+      "pattern": "^claude\\.ai ",
+      "reason": "Connectors fetched from the user's claude.ai account at startup, not from any file the app can point at."
     }
   ],
   "reminders": [

@@ -122,13 +122,21 @@ console.log(
       target,
       instructions: { start: listed("START "), afterRead: isFile ? listed("READ ") : null },
       skills: init?.skills ?? null,
+      // Everything invocable that isn't a skill: legacy .claude/commands plus
+      // the CLI's built-in commands (ignore.json lists those).
+      commands: init ? init.slash_commands.filter((c) => !init.skills.includes(c)) : null,
       agents: init?.agents ?? null,
       mcpServers: (init?.mcp_servers ?? []).map((m) => ({ name: m.name, status: m.status, source: m.source })),
       plugins: (init?.plugins ?? []).map((p) => ({ name: p.name, source: p.source, path: p.path })),
       read,
       hooks: hooks.map((h) => ({ subtype: h.subtype, event: h.hook_event ?? h.hook_event_name, name: h.hook_name })),
       debug: debug.slice(0, 200),
-      extra: init && { memory_paths: init.memory_paths, permissionMode: init.permissionMode, model: init.model },
+      extra: init && {
+        memory_paths: init.memory_paths,
+        permissionMode: init.permissionMode,
+        model: init.model,
+        slash_commands: init.slash_commands,
+      },
     },
     null,
     2,

@@ -83,7 +83,15 @@ if (app.targetKind === "file") {
 }
 
 const skillId = (s) => (s.source === "personal" || s.source === "project" ? s.shortName : s.name);
-section("Skills", app.skills.filter((s) => !s.shadowedBy).map(skillId), view.skills, null, "skills");
+const appSkills = app.skills.filter((s) => !s.shadowedBy);
+section("Skills", appSkills.filter((s) => s.source !== "command").map(skillId), view.skills, null, "skills");
+section(
+  "Legacy commands",
+  appSkills.filter((s) => s.source === "command").map((s) => s.name),
+  view.commands,
+  "app: skills with source=command.",
+  "commands",
+);
 
 section("Subagents", app.agents.filter((a) => !a.shadowedBy).map((a) => a.name), view.agents, null, "agents");
 

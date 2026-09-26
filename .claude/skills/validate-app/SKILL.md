@@ -34,7 +34,7 @@ node $V/scripts/make-fixture.mjs $S/nested --nested --force
 
 | Fixture | Folder | Targets |
 |---|---|---|
-| kitchen-sink: a standalone project with every surface the app resolves | `$S/kitchen-sink` | the folder (`--dir`), `src/api/handler.ts`, `src/web/page.ts`, `secrets/public.txt` |
+| kitchen-sink: a standalone project with every surface the app resolves | `$S/kitchen-sink` | the folder (`--dir`), `src/api/handler.ts`, `src/web/page.ts`, `src/legacy/old.ts`, `secrets/public.txt` |
 | nested: the same project at `app/` inside an outer repo that has one of each surface | `$S/nested/app` | the folder (`--dir`), `secrets/key.txt` |
 
 The nested fixture checks a project opened below its repo root. Anything of
@@ -174,6 +174,7 @@ prints one JSON object:
     "afterRead": ["/abs/path"] | null  // added by reading the target; null for dirs
   },
   "skills": ["name", ...],          // as the agent names them
+  "commands": ["name", ...],        // other invocable commands (legacy command files, built-ins)
   "agents": ["name", ...],          // subagents
   "mcpServers": [{ "name": "", "status": "", "source": "" }],
   "plugins": [{ "name": "", "source": "", "path": "" }],
@@ -196,7 +197,7 @@ effects, docs and changelog links, limits) and an `ignore.json`:
 {
   "validatedVersion": "1.2.3",
   "ignore": [
-    // side: "app" or "agent"; category: instructions | skills | agents | mcpServers | plugins
+    // side: "app" or "agent"; category: instructions | skills | commands | agents | mcpServers | plugins
     { "category": "skills", "side": "agent", "names": ["..."], "reason": "why this is fine" },
     { "category": "plugins", "side": "agent", "pattern": "regex", "reason": "..." }
   ],
